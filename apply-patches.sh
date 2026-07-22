@@ -56,6 +56,13 @@ fi
 # ---- Phase 3: Airoha kernel patches ----
 echo "[040] Installing airoha kernel patches..."
 if [ -d "$PATCHES/040-kernel-patches-airoha" ]; then
+    # Remove offload patches that conflict with YYH2913's PCIe/clock approach:
+    # 609-01/02 add formal PERSTOUT reset framework; YYH2913's 911 embeds PERST in clk driver
+    # 609-04 adds upstream x2 lanes (num-lanes + airoha,scu); YYH2913 912/913 use airoha,x2-mode + np-scu
+    echo "  Removing conflicting offload patches..."
+    rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-01-"* 2>/dev/null || true
+    rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-02-"* 2>/dev/null || true
+    rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-04-"* 2>/dev/null || true
     cp -v "$PATCHES/040-kernel-patches-airoha/"*.patch \
         "$CLONE/target/linux/airoha/patches-6.18/"
 fi
