@@ -78,6 +78,15 @@ jobs:
           cd ${{ env.BUILD_DIR }}
           make -j$(nproc) V=s 2>&1 | tee build.log
 
+      - name: Surface build errors
+        if: failure()
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          echo "=== Last 150 lines of build.log ==="
+          tail -150 build.log
+          echo "=== Error lines ==="
+          grep -nE "error:|Error [0-9]|undefined reference|recipe for target|No rule|No such file|fatal:" build.log | tail -50
+
       - name: Debug list build output
         if: always()
         run: |
