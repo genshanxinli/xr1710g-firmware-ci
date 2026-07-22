@@ -34,7 +34,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential ninja-build meson python3-distutils \
+          sudo apt-get install -y -qq build-essential ninja-build meson \
             libelf-dev libssl-dev libncurses-dev zlib1g-dev gawk flex bison gettext \
             unzip file rsync git subversion swig ecj libtool-bin autoconf automake
       - name: Clone OpenW1700k base
