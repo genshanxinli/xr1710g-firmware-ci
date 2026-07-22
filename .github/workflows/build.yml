@@ -74,18 +74,18 @@ jobs:
 
       - name: Build
         run: |
-          set -o pipefail
           cd ${{ env.BUILD_DIR }}
-          make -j$(nproc) V=s 2>&1 | tee build.log
+          make -j$(nproc) V=s > build.log 2>&1
 
       - name: Surface build errors
         if: failure()
         run: |
           cd ${{ env.BUILD_DIR }}
-          echo "=== Last 150 lines of build.log ==="
-          tail -150 build.log
-          echo "=== Error lines ==="
-          grep -nE "error:|Error [0-9]|undefined reference|recipe for target|No rule|No such file|fatal:" build.log | tail -50
+          echo "=== Build exit code: $? ==="
+          echo "=== Last 200 lines of build.log ==="
+          tail -200 build.log
+          echo "=== Error and warning lines ==="
+          grep -niE "error:|Error [0-9]|fatal:|FAILED|stop\.|No rule|No such file" build.log | tail -80
 
       - name: Debug list build output
         if: always()
