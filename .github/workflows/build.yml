@@ -42,14 +42,14 @@ jobs:
           mkdir -p ${{ env.BUILD_DIR }}/package/kernel/mt76/patches
           bash ci-repo/apply-patches.sh ${{ env.BUILD_DIR }} ci-repo/patches
 
-      - name: Debug: verify patches applied
+      - name: Debug verify patches applied
         run: |
-          echo "=== an7581.mk XR1710G check ==="
-          grep -n "xr1710g\|econet_xr1710g" ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk || echo "WARNING: XR1710G not in an7581.mk!"
-          echo "=== DTS file ==="
-          ls -la ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts || echo "WARNING: DTS not found!"
+          echo "=== DTS ==="
+          ls ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+          echo "=== Device ==="
+          grep -c econet_xr1710g ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk
           echo "=== Hostapd patches ==="
-          ls ${{ env.BUILD_DIR }}/package/network/services/hostapd/patches/ | head -5
+          ls ${{ env.BUILD_DIR }}/package/network/services/hostapd/patches/001-*
 
       - name: Update feeds
         run: |
@@ -63,24 +63,21 @@ jobs:
           cp ../ci-repo/defconfig .config
           make defconfig
 
-      - name: Debug: verify device config
+      - name: Debug verify config
         run: |
-          echo "=== Build target ==="
-          grep "CONFIG_TARGET_" ${{ env.BUILD_DIR }}/.config | grep -v "^#" | head -20
-          echo "=== Packages selected ==="
-          grep "CONFIG_PACKAGE_" ${{ env.BUILD_DIR }}/.config | grep -v "^#\|not set" | head -20
+          grep CONFIG_TARGET_ ${{ env.BUILD_DIR }}/.config | grep -v "^#" | head -20
+          grep CONFIG_PACKAGE_ ${{ env.BUILD_DIR }}/.config | grep "=y" | head -20
+
       - name: Build
         run: |
           cd ${{ env.BUILD_DIR }}
           make -j$(nproc) V=s 2>&1 | tee build.log
 
-      - name: Debug: build output listing
+      - name: Debug list build output
         if: always()
         run: |
-          echo "=== bin/targets tree ==="
-          find ${{ env.BUILD_DIR }}/bin/targets/ -type f 2>/dev/null | head -50
-          echo "=== an7581 dir ==="
-          ls -la ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/ 2>/dev/null || echo "NO DIR"
+          find ${{ env.BUILD_DIR }}/bin -type f -name "*.itb" -o -name "*.bin" -o -name "*.tar" 2>/dev/null | head -30
+          ls ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/ 2>/dev/null || echo "an7581 dir not found"
 
       - name: Upload firmware artifact
         if: always()
