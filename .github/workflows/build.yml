@@ -44,12 +44,14 @@ jobs:
 
       - name: Debug verify patches applied
         run: |
+          echo "=== CWD ==="
+          pwd
           echo "=== DTS ==="
-          ls ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts
+          test -f ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts || { echo "FAIL: DTS missing"; exit 1; }
           echo "=== Device ==="
-          grep -c econet_xr1710g ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk
+          grep -c econet_xr1710g ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk || { echo "FAIL: device not in an7581.mk"; exit 1; }
           echo "=== Hostapd patches ==="
-          ls ${{ env.BUILD_DIR }}/package/network/services/hostapd/patches/001-*
+          ls ${{ env.BUILD_DIR }}/package/network/services/hostapd/patches/001-* || { echo "FAIL: hostapd patches missing"; exit 1; }
 
       - name: Update feeds
         run: |
@@ -65,19 +67,50 @@ jobs:
 
       - name: Debug verify config
         run: |
-          grep CONFIG_TARGET_ ${{ env.BUILD_DIR }}/.config | grep -v "^#" | head -20
-          grep CONFIG_PACKAGE_ ${{ env.BUILD_DIR }}/.config | grep "=y" | head -20
+          echo "=== Target ==="
+          grep "CONFIG_TARGET_airoha_an7581_DEVICE_econet_xr1710g-ubi=y" ${{ env.BUILD_DIR }}/.config || { echo "FAIL: XR1710G device not selected"; exit 1; }
+          echo "=== Key packages ==="
+          grep "CONFIG_PACKAGE_luci-app-mlo=y" ${{ env.BUILD_DIR }}/.config || { echo "FAIL: luci-app-mlo not selected"; exit 1; }
 
       - name: Build
         run: |
+          set -o pipefail
           cd ${{ env.BUILD_DIR }}
           make -j$(nproc) V=s 2>&1 | tee build.log
 
       - name: Debug list build output
         if: always()
         run: |
-          find ${{ env.BUILD_DIR }}/bin -type f -name "*.itb" -o -name "*.bin" -o -name "*.tar" 2>/dev/null | head -30
-          ls ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/ 2>/dev/null || echo "an7581 dir not found"
+          echo "=== CWD ==="
+          pwd
+          echo "=== ls bin ==="
+          ls -la ${{ env.BUILD_DIR }}/bin/ 2>/dev/null || echo "bin/ dir missing"
+          echo "=== ls bin/targets ==="
+          ls -la ${{ env.BUILD_DIR }}/bin/targets/ 2>/dev/null || echo "targets/ dir missing"
+          echo "=== ls targets/airoha ==="
+          ls -la ${{ env.BUILD_DIR }}/bin/targets/airoha/ 2>/dev/null || echo "airoha/ dir missing"
+          echo "=== ls targets/airoha/an7581 ==="
+          ls -la ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/ 2>/dev/null || echo "an7581/ dir missing"
+          echo "=== find all built artifacts ==="
+          find ${{ env.BUILD_DIR }}/bin -type f 2>/dev/null | head -50
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.sha }}
+          path: ${{ env.BUILD_DIR }}/build.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload full bin directory (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-bin-${{ github.sha }}
+          path: ${{ env.BUILD_DIR }}/bin/
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Upload firmware artifact
         if: always()
