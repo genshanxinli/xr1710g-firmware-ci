@@ -41,10 +41,6 @@ if [ -d "$PATCHES/020-base-files" ]; then
         cp -v "$PATCHES/020-base-files/lib/preinit/03_create_devmem" \
             "$CLONE/target/linux/airoha/base-files/lib/preinit/"
     fi
-    if [ -f "$PATCHES/020-base-files/lib/preinit/04_set_netdev_label" ]; then
-        cp -v "$PATCHES/020-base-files/lib/preinit/04_set_netdev_label" \
-            "$CLONE/target/linux/airoha/base-files/lib/preinit/"
-    fi
 fi
 
 # ---- Phase 1 (cont): Patches to existing files ----
@@ -95,16 +91,6 @@ if [ -d "$PATCHES/080-wireless-regdb" ]; then
         "$CLONE/package/firmware/wireless-regdb/patches/"
 fi
 
-# ---- Phase 6: LuCI apps ----
-echo "[090] Installing LuCI apps..."
-if [ -d "$PATCHES/090-luci" ]; then
-    for app in "$PATCHES/090-luci/"*/; do
-        [ -d "$app" ] || continue
-        appname="$(basename "$app")"
-        echo "  Installing $appname..."
-        cp -r "$app" "$CLONE/package/$appname"
-    done
-fi
 
 echo ""
 echo "All patches applied successfully."

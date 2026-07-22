@@ -1,6 +1,8 @@
---- openw1700k-analysis/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
-+++ yyh2913-openwrt/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
-@@ -36,6 +36,9 @@
+diff --git a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
+index 8584b84..ae2b4d9 100644
+--- a/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
++++ b/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
+@@ -36,6 +36,9 @@ platform_do_upgrade() {
  		nokia,xg-040g-md-ubi)
  			fit_do_upgrade "$1"
  			;;

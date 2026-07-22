@@ -15,15 +15,14 @@ patches/                      Patch overlay directories:
   040-kernel-patches-airoha/    YYH2913-only airoha kernel patches
   050-kernel-patches-generic/   YYH2913-only generic kernel patches (bridge flow offload, SOE)
   060-mt76/                     mt76 WiFi driver patches + Makefile bump
-  070-hostapd/                  hostapd interface short-circuit + 6GHz no-DFS
+  070-hostapd/                  hostapd MLD validation + interface short-circuit
   080-wireless-regdb/           US regulatory power limits for XR1710G
-  090-luci/                     LuCI application packages
 defconfig                     Saved kernel/target configuration
 ```
 
 ## How it Works
 
-1. **CI workflow** clones OpenW1700k at a pinned commit
+1. **CI workflow** clones OpenW1700k `offload` branch at a pinned commit (4dc00ea955)
 2. **apply-patches.sh** copies new files and applies unified diffs in numbered order
 3. `./scripts/feeds update -a && ./scripts/feeds install -a`
 4. `cp defconfig .config && make defconfig`
@@ -38,8 +37,8 @@ defconfig                     Saved kernel/target configuration
 
 ## Patch Sources
 
-- **Base:** openwrt-fanboy/OpenW1700k (cleaner patches, closer to upstream)
-- **Overlay:** YYH2913/openwrt `xr1710g-6.18-integration` branch (device support, bridge flow offload, SOE, LuCI, WiFi fixes)
+- **Base:** openwrt-fanboy/OpenW1700k `offload` branch (bridge flow offload, PPE NPU fixes, mt76 base patches, LuCI apps)
+- **Overlay:** YYH2913/openwrt `xr1710g-6.18-integration` branch (SOE, WiFi fixes, MLD, device config)
 
 ## Regenerating defconfig
 

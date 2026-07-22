@@ -1,5 +1,7 @@
---- openw1700k-analysis/package/kernel/mt76/Makefile
-+++ yyh2913-openwrt/package/kernel/mt76/Makefile
+diff --git a/package/kernel/mt76/Makefile b/package/kernel/mt76/Makefile
+index a8df287..0bf31c5 100644
+--- a/package/kernel/mt76/Makefile
++++ b/package/kernel/mt76/Makefile
 @@ -1,7 +1,7 @@
  include $(TOPDIR)/rules.mk
  
@@ -9,3 +11,11 @@
  
  PKG_LICENSE:=BSD-3-Clause-Clear
  PKG_LICENSE_FILES:=
+@@ -55,7 +55,6 @@ endef
+ define KernelPackage/mt76-core
+   $(KernelPackage/mt76-default)
+   TITLE:=MediaTek MT76xx wireless driver
+-  DEPENDS+=+TARGET_airoha_an7581:kmod-airoha-eth
+   HIDDEN:=1
+   FILES:=\
+ 	$(PKG_BUILD_DIR)/mt76.ko

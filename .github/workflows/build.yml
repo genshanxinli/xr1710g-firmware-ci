@@ -8,7 +8,7 @@ on:
 
 env:
   OW1700K_REPO: openwrt-fanboy/OpenW1700k
-  OW1700K_COMMIT: b5191da03cf4864416afee8ef5542e1ffe596d41
+  OW1700K_COMMIT: 4dc00ea9557ae9fae5f6d42880368c0435c0a85e
   BUILD_DIR: openwrt
 
 jobs:
@@ -39,6 +39,7 @@ jobs:
 
       - name: Apply XR1710G patches
         run: |
+          mkdir -p ${{ env.BUILD_DIR }}/package/kernel/mt76/patches
           bash ci-repo/apply-patches.sh ${{ env.BUILD_DIR }} ci-repo/patches
 
       - name: Update feeds
