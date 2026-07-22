@@ -8,7 +8,7 @@ on:
 
 env:
   OW1700K_REPO: openwrt-fanboy/OpenW1700k
-  OW1700K_COMMIT: 2196dff42ea555f93fc7c3ea7f64056fdee6668c
+  OW1700K_COMMIT: b5191da03cf4864416afee8ef5542e1ffe596d41
   BUILD_DIR: openwrt
 
 jobs:

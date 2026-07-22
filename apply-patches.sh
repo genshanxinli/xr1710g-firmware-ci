@@ -31,8 +31,9 @@ if [ -d "$PATCHES/020-base-files" ]; then
     if [ -d "$PATCHES/020-base-files/etc" ]; then
         cp -rv "$PATCHES/020-base-files/etc"/* "$CLONE/target/linux/airoha/an7581/base-files/etc/"
     fi
-    # airoha-global files (sysctl.d, preinit)
+    # airoha-global files (sysctl.d, preinit) — create target dirs if missing
     if [ -f "$PATCHES/020-base-files/etc/sysctl.d/13-nf-bridge.conf" ]; then
+        mkdir -p "$CLONE/target/linux/airoha/base-files/etc/sysctl.d"
         cp -v "$PATCHES/020-base-files/etc/sysctl.d/13-nf-bridge.conf" \
             "$CLONE/target/linux/airoha/base-files/etc/sysctl.d/"
     fi
