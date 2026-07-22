@@ -73,6 +73,7 @@ fi
 # ---- Phase 4: mt76 patches ----
 echo "[060] Installing mt76 patches..."
 if [ -d "$PATCHES/060-mt76/patches" ]; then
+    mkdir -p "$CLONE/package/kernel/mt76/patches"
     cp -v "$PATCHES/060-mt76/patches/"*.patch \
         "$CLONE/package/kernel/mt76/patches/"
 fi
