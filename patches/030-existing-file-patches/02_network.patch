@@ -1,0 +1,17 @@
+--- openw1700k-analysis/target/linux/airoha/an7581/base-files/etc/board.d/02_network
++++ yyh2913-openwrt/target/linux/airoha/an7581/base-files/etc/board.d/02_network
+@@ -17,6 +17,14 @@
+ 	gemtek,w1700k-ubi)
+ 		ucidef_set_interfaces_lan_wan "lan2 lan3 lan4" "wan"
+ 		;;
++	econet,xr1710g-ubi)
++		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"
++		ucidef_set_country "US"
++		ucidef_set_wireless "2g" "XR1710G"
++		ucidef_set_wireless "5g" "XR1710G-5G"
++		ucidef_set_wireless "6g" "XR1710G-6G"
++		ucidef_set_root_password_plain "password"
++		;;
+ 	nokia,valyrian)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 10g" "wan"
+ 		;;

@@ -1,0 +1,16 @@
+--- openw1700k-analysis/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
++++ yyh2913-openwrt/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
+@@ -21,7 +21,7 @@
+ boot()
+ {
+ 	case $(board_name) in
+-	gemtek,w1700k-ubi)
++	gemtek,w1700k-ubi|econet,xr1710g-ubi)
+ 		hwmon=$(find_nct7802)
+ 
+ 		# Temporarily disable automatic fan control to configure curve
+@@ -45,4 +45,3 @@
+ 		;;
+ 	esac
+ }
+-

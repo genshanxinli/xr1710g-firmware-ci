@@ -1,0 +1,79 @@
+name: XR1710G Firmware CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  OW1700K_REPO: openwrt-fanboy/OpenW1700k
+  OW1700K_COMMIT: 2196dff42ea555f93fc7c3ea7f64056fdee6668c
+  BUILD_DIR: openwrt
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+        with:
+          path: ci-repo
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        id: ccache
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ env.OW1700K_COMMIT }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ env.OW1700K_COMMIT }}-
+            ccache-${{ runner.os }}-
+
+      - name: Clone OpenW1700k base
+        run: |
+          git clone --depth=1 https://github.com/${{ env.OW1700K_REPO }}.git ${{ env.BUILD_DIR }}
+          cd ${{ env.BUILD_DIR }}
+          git fetch --depth=1 origin ${{ env.OW1700K_COMMIT }}
+          git checkout ${{ env.OW1700K_COMMIT }}
+
+      - name: Apply XR1710G patches
+        run: |
+          bash ci-repo/apply-patches.sh ${{ env.BUILD_DIR }} ci-repo/patches
+
+      - name: Update feeds
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          cp ci-repo/defconfig .config
+          make defconfig
+
+      - name: Build
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make -j$(nproc) V=s 2>&1 | tee build.log
+
+      - name: Upload firmware artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr1710g-firmware-${{ github.sha }}
+          path: ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.itb
+          if-no-files-found: warn
+
+      - name: Create Release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.itb
+          tag_name: ${{ github.ref_name }}
+          name: XR1710G Firmware ${{ github.ref_name }}
+          body: |
+            Automated XR1710G firmware build from YYH2913 patches atop OpenW1700k.
+          draft: false
+          prerelease: false

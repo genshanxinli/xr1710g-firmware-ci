@@ -1,0 +1,12 @@
+--- openw1700k-analysis/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
++++ yyh2913-openwrt/target/linux/airoha/an7581/base-files/lib/upgrade/platform.sh
+@@ -36,6 +36,9 @@
+ 		nokia,xg-040g-md-ubi)
+ 			fit_do_upgrade "$1"
+ 			;;
++		econet,xr1710g-ubi)
++			fit_do_upgrade "$1"
++			;;
+ 		*)
+ 			nand_do_upgrade "$1"
+ 			;;
