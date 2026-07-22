@@ -50,9 +50,8 @@ jobs:
       - name: Configure
         run: |
           cd ${{ env.BUILD_DIR }}
-          cp ci-repo/defconfig .config
+          cp ../ci-repo/defconfig .config
           make defconfig
-
       - name: Build
         run: |
           cd ${{ env.BUILD_DIR }}
