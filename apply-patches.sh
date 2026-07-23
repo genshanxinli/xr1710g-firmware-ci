@@ -63,6 +63,10 @@ if [ -d "$PATCHES/040-kernel-patches-airoha" ]; then
     rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-01-"* 2>/dev/null || true
     rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-02-"* 2>/dev/null || true
     rm -fv "$CLONE/target/linux/airoha/patches-6.18/609-04-"* 2>/dev/null || true
+    # 939-cpufreq is the upstream SMCCC driver that rewrites airoha-cpufreq.c;
+    # it conflicts with YYH2913's cpufreq fix (920) which targets the older
+    # dev_pm_domain_attach_list API superseded by 939.
+    rm -fv "$CLONE/target/linux/airoha/patches-6.18/939-cpufreq-airoha-Add-EN7581-CPUFreq-SMCCC-driver.patch" 2>/dev/null || true
     cp -v "$PATCHES/040-kernel-patches-airoha/"*.patch \
         "$CLONE/target/linux/airoha/patches-6.18/"
 fi
