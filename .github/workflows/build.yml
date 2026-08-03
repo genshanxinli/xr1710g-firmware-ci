@@ -86,8 +86,6 @@ jobs:
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: |
             ccache-fanboy-
-          restore-keys: |
-            ccache-fanboy-
 
       - name: Install build dependencies
         run: |
@@ -230,4 +228,3 @@ jobs:
             Upstream commit: ${{ steps.clone.outputs.upstream_commit }}
           draft: false
           prerelease: false
-
