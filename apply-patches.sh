@@ -27,6 +27,18 @@ copy_overlay() {
   done < <(cd "$src" && find . -type f -not -path '*/.git/*' -not -path '*/.github/*' -not -path '*/.devcontainer/*' -not -path '*/.vscode/*' -print0)
 }
 
+copy_patch_files() {
+  local src="$1" dst="$2" p
+  [ -d "$src" ] || return 0
+  mkdir -p "$dst"
+  for p in "$src"/*.patch; do
+    [ -f "$p" ] || continue
+    if [ ! -e "$dst/$(basename "$p")" ]; then
+      cp -p "$p" "$dst/"
+    fi
+  done
+}
+
 apply_patch_dir() {
   local dir="$1" name="$2" p before after
   [ -d "$dir" ] || return 0
@@ -56,7 +68,10 @@ echo "Applying XR1710G overlays to $CLONE"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
-apply_patch_dir "$PATCHES/yyh" "yyh adaptation patches"
+copy_patch_files "$PATCHES/yyh/kernel" "$CLONE/target/linux/airoha/patches-6.18"
+copy_patch_files "$PATCHES/yyh/regdb" "$CLONE/package/firmware/wireless-regdb/patches"
+copy_patch_files "$PATCHES/yyh/mt76/patches" "$CLONE/package/kernel/mt76/patches"
+apply_patch_dir "$PATCHES/yyh/apply" "yyh package patches"
 copy_overlay "$OVERLAY/xr1710g" "xr1710g new files"
 apply_patch_dir "$PATCHES/xr1710g" "xr1710g adaptation patches"
 
@@ -65,5 +80,7 @@ test -f "$CLONE/target/linux/airoha/dts/an7581-xr1710g-ubi.dts" \
   || { echo "FAIL: XR1710G DTS missing"; exit 1; }
 grep -q "econet_xr1710g" "$CLONE/target/linux/airoha/image/an7581.mk" \
   || { echo "FAIL: XR1710G device block missing"; exit 1; }
+ls "$CLONE"/target/linux/airoha/patches-6.18/330-* \
+   "$CLONE"/target/linux/airoha/patches-6.18/921-* >/dev/null 2>&1 \
+  || { echo "FAIL: YYH kernel patch files missing"; exit 1; }
 echo "All patches applied successfully."
-
