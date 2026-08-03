@@ -19,15 +19,8 @@ allowed_hurryman() {
     package/network/services/hostapd/*|\
     target/linux/airoha/*|\
     target/linux/generic/backport-6.18/9910-*|\
-    target/linux/generic/backport-6.18/9911-*|\
-    target/linux/generic/backport-6.18/9912-*|\
-    target/linux/generic/backport-6.18/9913-*|\
     target/linux/generic/hack-6.18/9991-*|\
     target/linux/generic/hack-6.18/9992-*|\
-    target/linux/generic/pending-6.18/9911-*|\
-    target/linux/generic/pending-6.18/9912-*|\
-    target/linux/generic/pending-6.18/9913-*|\
-    target/linux/generic/pending-6.18/9914-*|\
     tools/elfutils/patches/014-*) return 0 ;;
   esac
   return 1
@@ -42,16 +35,6 @@ allowed_yyh() {
     package/network/utils/iwinfo/*|\
     package/utils/ucode/*|\
     target/linux/airoha/*|\
-    target/linux/generic/backport-6.18/9910-*|\
-    target/linux/generic/backport-6.18/9912-*|\
-    target/linux/generic/backport-6.18/9913-*|\
-    target/linux/generic/backport-6.18/9914-*|\
-    target/linux/generic/backport-6.18/9915-*|\
-    target/linux/generic/backport-6.18/9916-*|\
-    target/linux/generic/backport-6.18/9917-*|\
-    target/linux/generic/backport-6.18/9918-*|\
-    target/linux/generic/backport-6.18/9919-*|\
-    target/linux/generic/hack-6.18/9990-*|\
     target/linux/generic/pending-6.18/675-*|\
     target/linux/generic/pending-6.18/9990-*|\
     target/linux/generic/pending-6.18/9991-*|\
@@ -113,5 +96,3 @@ yyh_new_files=$yyh_count
 refreshed_at=$(date -u +'%Y-%m-%d %H:%M UTC')
 EOF
 echo "Overlay extraction complete."
-
-
