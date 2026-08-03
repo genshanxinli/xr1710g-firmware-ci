@@ -3,12 +3,18 @@ name: XR1710G Firmware CI
 on:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   OW1700K_REPO: OpenWRT-fanboy/OpenW1700k
   OW1700K_BRANCH: offload
   GLASS_REPO: rchen14b/luci-theme-glass
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt
+  CCACHE_MAXSIZE: 6G
+  CCACHE_COMPRESS: "1"
 
 jobs:
   build:
@@ -29,25 +35,48 @@ jobs:
           echo "upstream_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "Cloned upstream commit: $(git rev-parse HEAD)"
 
+      - name: Prepare dl cache path
+        run: |
+          mkdir -p ${{ env.BUILD_DIR }}/dl
+
+      - name: Restore dl cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: |
+            dl-fanboy-
+
+      - name: Prepare feeds cache path
+        run: |
+          mkdir -p ${{ env.BUILD_DIR }}/feeds
+
+      - name: Restore feeds cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/feeds
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: |
+            feeds-fanboy-
+
       - name: Restore toolchain cache
         id: cache-tc
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
             ${{ env.BUILD_DIR }}/build_dir/toolchain-*
-          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ hashFiles('ci-repo/overlay/**', 'ci-repo/patches/**') }}
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: |
-            toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             toolchain-fanboy-
 
       - name: Restore ccache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ hashFiles('ci-repo/overlay/**', 'ci-repo/patches/**') }}
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: |
-            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             ccache-fanboy-
 
       - name: Install build dependencies
@@ -100,6 +129,17 @@ jobs:
             || { echo "FAIL: luci-app-mlo not selected"; exit 1; }
           grep "CONFIG_PACKAGE_luci-theme-glass=y" ${{ env.BUILD_DIR }}/.config \
             || { echo "FAIL: luci-theme-glass not selected"; exit 1; }
+
+      - name: Download sources
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          for i in 1 2 3; do
+            if make download -j$(nproc); then
+              break
+            fi
+            echo "Download attempt $i failed"
+            sleep 10
+          done
 
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
