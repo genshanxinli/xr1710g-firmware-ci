@@ -153,6 +153,22 @@ jobs:
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
 
+      - name: Save toolchain cache
+        if: steps.cache-tc.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
+
+      - name: Save ccache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Quick kernel patch check
         run: |
           cd ${{ env.BUILD_DIR }}

@@ -42,7 +42,7 @@ allowed_yyh() {
     package/network/utils/iwinfo/*|\
     package/utils/ucode/*|\
     target/linux/airoha/*|\
-    target/linux/generic/backport-6.18/704-*|\
+
     target/linux/generic/backport-6.18/9910-*|\
     target/linux/generic/backport-6.18/9912-*|\
     target/linux/generic/backport-6.18/9913-*|\
@@ -114,3 +114,4 @@ yyh_new_files=$yyh_count
 refreshed_at=$(date -u +'%Y-%m-%d %H:%M UTC')
 EOF
 echo "Overlay extraction complete."
+
