@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenWrt <noreply@openwrt.org>
+Date: Fri, 31 Jul 2026 00:00:00 +0200
+Subject: [PATCH] netfilter: nf_flow_table: add teardown_by_eth vendor notifier hook
+
+Patch 930 lets the airoha PPE driver ask nf_flow_table to tear down L4
+flows for a MAC via symbol_get(flow_offload_teardown_by_eth).  The
+reverse direction -- a way for *nf_flow_table* to notify an out-of-band
+PPE driver when *anyone* invokes flow_offload_teardown_by_eth(addr) --
+is missing; external callers do not cause the airoha PPE L2 cache to
+be drained, leaving stale FOE entries that drop packets until the
+L2 cache ager catches up.
+
+Close that asymmetry with a single-slot raw_notifier chain stored in
+nf_flow_table_core.c.  flow_offload_teardown_by_eth(addr) calls the
+chain before its existing flowtable walk, passing the address as the
+notifier *ptr.  The airoha PPE driver registers itself at
+airoha_ppe_init() time and unregisters at airoha_ppe_deinit();
+the new callback reuses airoha_ppe_schedule_flush_by_mac() so the
+same workqueue path runs whether the trigger came from the switchdev
+notifier, the new teardown_by_eth notifier, or mt76 STA-removal
+flush (patch-a).  The drain is idempotent.
+
+The existing symbol_get(flow_offload_teardown_by_eth) use in
+airoha_ppe_fdb_work_handler is left untouched: that path drains L2
+first then asks nf_flow_table to drain L4, while the new path drains
+L4 first then asks PPE to drain L2.  Both directions now converge on
+the same workqueue.
+
+Signed-off-by: OpenWrt <noreply@openwrt.org>
+---
+--- a/include/net/netfilter/nf_flow_table.h	2026-07-31 09:54:46.397172286 -1000
++++ b/include/net/netfilter/nf_flow_table.h	2026-07-31 11:05:57.118990263 -1000
+@@ -299,6 +299,9 @@
+ int nf_flow_table_init(struct nf_flowtable *flow_table);
+ void nf_flow_table_free(struct nf_flowtable *flow_table);
+ 
++int nf_flow_offload_teardown_by_eth_register_notifier(struct notifier_block *nb);
++int nf_flow_offload_teardown_by_eth_unregister_notifier(struct notifier_block *nb);
++
+ void flow_offload_teardown(struct flow_offload *flow);
+ void flow_offload_teardown_by_eth(const u8 *addr);
+ 
+--- a/net/netfilter/nf_flow_table_core.c	2026-07-31 09:54:46.395175743 -1000
++++ b/net/netfilter/nf_flow_table_core.c	2026-07-31 09:57:10.430623387 -1000
+@@ -5,6 +5,7 @@
+ #include <linux/netfilter.h>
+ #include <linux/rhashtable.h>
+ #include <linux/netdevice.h>
++#include <linux/notifier.h>
+ #include <linux/etherdevice.h>
+ #include <net/ip.h>
+ #include <net/ip6_route.h>
+@@ -17,6 +18,8 @@
+ static DEFINE_MUTEX(flowtable_lock);
+ static LIST_HEAD(flowtables);
+ 
++static RAW_NOTIFIER_HEAD(flow_teardown_by_eth_chain);
++
+ static void
+ flow_offload_fill_dir(struct flow_offload *flow,
+ 		      enum flow_offload_tuple_dir dir)
+@@ -417,6 +420,15 @@
+ 	    is_multicast_ether_addr(addr))
+ 		return;
+ 
++	/* Notify any out-of-band PPE/WED driver that wants to drain its
++	 * own L2 cache when a flow_offload_teardown_by_eth() call is
++	 * issued from anywhere (not just its own switchdev notifier).
++	 * The callback queues vendor-private work; nothing here runs
++	 * L2 logic in atomic context.  Run before the flowtable walk
++	 * so both sides can proceed in parallel.
++	 */
++	raw_notifier_call_chain(&flow_teardown_by_eth_chain, 0, (void *)addr);
++
+ 	mutex_lock(&flowtable_lock);
+ 	list_for_each_entry(flowtable, &flowtables, list)
+ 		nf_flow_table_iterate(flowtable, nf_flow_teardown_if_eth,
+@@ -425,6 +437,18 @@
+ }
+ EXPORT_SYMBOL_GPL(flow_offload_teardown_by_eth);
+ 
++int nf_flow_offload_teardown_by_eth_register_notifier(struct notifier_block *nb)
++{
++	return raw_notifier_chain_register(&flow_teardown_by_eth_chain, nb);
++}
++EXPORT_SYMBOL_GPL(nf_flow_offload_teardown_by_eth_register_notifier);
++
++int nf_flow_offload_teardown_by_eth_unregister_notifier(struct notifier_block *nb)
++{
++	return raw_notifier_chain_unregister(&flow_teardown_by_eth_chain, nb);
++}
++EXPORT_SYMBOL_GPL(nf_flow_offload_teardown_by_eth_unregister_notifier);
++
+ 
+ struct flow_offload_tuple_rhash *
+ flow_offload_lookup(struct nf_flowtable *flow_table,
+--- a/drivers/net/ethernet/airoha/airoha_eth.h	2026-07-31 09:54:46.393389225 -1000
++++ b/drivers/net/ethernet/airoha/airoha_eth.h	2026-07-31 09:55:38.049293775 -1000
+@@ -593,6 +593,7 @@
+ 
+ 	struct airoha_ppe *ppe;
+ 	struct notifier_block switchdev_nb;
++	struct notifier_block teardown_by_eth_nb;
+ 	struct workqueue_struct *fdb_wq;
+ 	struct rhashtable flow_table;
+ 
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c	2026-07-31 09:54:46.391114297 -1000
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c	2026-07-31 11:06:33.810227469 -1000
+@@ -1463,6 +1463,17 @@
+ 	airoha_ppe_schedule_flush_by_mac(ppe->eth, addr);
+ }
+ 
++static int airoha_ppe_teardown_by_eth_notifier(struct notifier_block *nb,
++					      unsigned long event, void *ptr)
++{
++	struct airoha_eth *eth = container_of(nb, struct airoha_eth,
++					      teardown_by_eth_nb);
++	const u8 *addr = ptr;
++
++	airoha_ppe_schedule_flush_by_mac(eth, addr);
++	return NOTIFY_DONE;
++}
++
+ static int airoha_ppe_switchdev_event(struct notifier_block *nb,
+ 				      unsigned long event, void *ptr)
+ {
+@@ -1834,8 +1845,15 @@
+ 	if (err)
+ 		goto error_wq_destroy;
+ 
++	eth->teardown_by_eth_nb.notifier_call = airoha_ppe_teardown_by_eth_notifier;
++	err = nf_flow_offload_teardown_by_eth_register_notifier(&eth->teardown_by_eth_nb);
++	if (err)
++		goto error_switchdev_unregister;
++
+ 	return 0;
+ 
++error_switchdev_unregister:
++	unregister_switchdev_notifier(&eth->switchdev_nb);
+ error_wq_destroy:
+ 	destroy_workqueue(eth->fdb_wq);
+ error_debugfs_destroy:
+@@ -1852,6 +1870,8 @@
+ {
+ 	struct airoha_npu *npu;
+ 
++	nf_flow_offload_teardown_by_eth_unregister_notifier(&eth->teardown_by_eth_nb);
++
+ 	unregister_switchdev_notifier(&eth->switchdev_nb);
+ 	destroy_workqueue(eth->fdb_wq);
+ 

@@ -1,0 +1,18 @@
+diff --git a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
+index b9d5633..addb0d4 100644
+--- a/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
++++ b/target/linux/airoha/an7581/base-files/etc/init.d/airoha_fan
+@@ -21,7 +21,7 @@ find_nct7802()
+ boot()
+ {
+ 	case $(board_name) in
+-	gemtek,w1700k-ubi)
++	gemtek,w1700k-ubi|econet,xr1710g-ubi)
+ 		hwmon=$(find_nct7802)
+ 
+ 		# Temporarily disable automatic fan control to configure curve
+@@ -45,4 +45,3 @@ boot()
+ 		;;
+ 	esac
+ }
+-

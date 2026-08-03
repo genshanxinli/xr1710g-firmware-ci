@@ -1,0 +1,11 @@
+fanboy_repo: OpenWRT-fanboy/OpenW1700k
+fanboy_ref: refs/heads/offload
+fanboy_role: base
+
+hurryman_repo: hurryman2212/OpenW1700k-test
+hurryman_ref: refs/heads/offload-oc
+hurryman_role: overlay
+
+yyh_repo: YYH2913/openwrt
+yyh_ref: refs/heads/xr1710g-6.18-integration
+yyh_role: overlay

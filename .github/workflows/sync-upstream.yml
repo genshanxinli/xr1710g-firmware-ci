@@ -1,0 +1,62 @@
+name: Sync Upstream Tracking
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+
+      - name: Check upstream SHAs
+        id: check
+        run: |
+          if bash scripts/check-upstream.sh; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Refresh overlays and validate
+        id: refresh
+        if: steps.check.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          bash scripts/refresh-upstream.sh
+          bash scripts/validate-overlay.sh
+
+      - name: Create conflict issue
+        if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'failure'
+        run: |
+          gh issue create \
+            --title "Upstream overlay refresh conflict" \
+            --body-file docs/upstream-changes.md \
+            || true
+
+      - name: Commit and open summary PR
+        if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B upstream-sync
+          git add overlay patches upstream.lock.json docs
+          git commit -m "sync: refresh upstream tracking set" || true
+          git push -f origin upstream-sync
+          if gh pr view upstream-sync --json number -q .number >/dev/null 2>&1; then
+            gh pr edit upstream-sync --body-file docs/upstream-changes.md
+          else
+            gh pr create \
+              --base main \
+              --head upstream-sync \
+              --title "Upstream tracking refresh" \
+              --body-file docs/upstream-changes.md
+          fi

@@ -1,0 +1,35 @@
+From 54b61cebb3e5d27aba7b293fe9d11d45df1acbd4 Mon Sep 17 00:00:00 2001
+From: Michael-CY Lee <michael-cy.lee@mediatek.com>
+Date: Thu, 16 Oct 2025 11:02:00 +0800
+Subject: [PATCH] wifi: mt76: reset channel state during scanning
+
+Reset the channel state of all channels during scanning to prevent the
+ACS algorithm from selecting unexpected channel.
+
+Note: scan.c set_bit(MT76_SCANNING) is already in upstream mt76
+(2026-07-24, commit 50480826). Only the mac80211.c chan_state reset
+guard remains needed.
+
+Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
+Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
+---
+ mac80211.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/mac80211.c b/mac80211.c
+index 3ab29b0..f6fb86d 100644
+--- a/mac80211.c
++++ b/mac80211.c
+@@ -1062,7 +1062,8 @@ int __mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
+ 	if (!offchannel)
+ 		phy->main_chandef = *chandef;
+ 
+-	if (chandef->chan != phy->main_chandef.chan)
++	if (chandef->chan != phy->main_chandef.chan ||
++	    test_bit(MT76_SCANNING, &phy->state))
+ 		memset(phy->chan_state, 0, sizeof(*phy->chan_state));
+ 
+ 	ret = dev->drv->set_channel(phy);
+-- 
+2.45.2
+

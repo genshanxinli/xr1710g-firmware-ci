@@ -1,0 +1,162 @@
+name: XR1710G Firmware CI
+
+on:
+  workflow_dispatch:
+
+env:
+  OW1700K_REPO: OpenWRT-fanboy/OpenW1700k
+  OW1700K_BRANCH: offload
+  GLASS_REPO: rchen14b/luci-theme-glass
+  GLASS_REF: v1.1.6
+  BUILD_DIR: openwrt
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+        with:
+          path: ci-repo
+
+      - name: Clone fanboy offload base
+        id: clone
+        run: |
+          git clone --depth=1 --branch ${{ env.OW1700K_BRANCH }} \
+            https://github.com/${{ env.OW1700K_REPO }}.git ${{ env.BUILD_DIR }}
+          cd ${{ env.BUILD_DIR }}
+          echo "upstream_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "Cloned upstream commit: $(git rev-parse HEAD)"
+
+      - name: Restore toolchain cache
+        id: cache-tc
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ hashFiles('ci-repo/overlay/**', 'ci-repo/patches/**') }}
+          restore-keys: |
+            toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            toolchain-fanboy-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ hashFiles('ci-repo/overlay/**', 'ci-repo/patches/**') }}
+          restore-keys: |
+            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            ccache-fanboy-
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ninja-build meson \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev gawk flex bison gettext \
+            unzip file rsync git subversion swig ecj libtool-bin autoconf automake
+
+      - name: Apply XR1710G overlays
+        run: |
+          bash ci-repo/apply-patches.sh ${{ env.BUILD_DIR }} ci-repo
+
+      - name: Clone luci-theme-glass
+        run: |
+          git clone --depth=1 --branch ${{ env.GLASS_REF }} \
+            https://github.com/${{ env.GLASS_REPO }}.git \
+            ${{ env.BUILD_DIR }}/package/luci-theme-glass
+
+      - name: Verify overlay applied
+        run: |
+          echo "=== DTS ==="
+          test -f ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts \
+            || { echo "FAIL: DTS missing"; exit 1; }
+          echo "=== Device block ==="
+          grep -q econet_xr1710g ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk \
+            || { echo "FAIL: device not in an7581.mk"; exit 1; }
+          echo "=== YYH kernel patches ==="
+          ls ${{ env.BUILD_DIR }}/target/linux/airoha/patches-6.18/330-* \
+             ${{ env.BUILD_DIR }}/target/linux/airoha/patches-6.18/921-* \
+            || { echo "FAIL: unique airoha patches missing"; exit 1; }
+
+      - name: Update feeds
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Configure
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          cp ../ci-repo/defconfig .config
+          make defconfig
+
+      - name: Verify config
+        run: |
+          grep "CONFIG_TARGET_airoha_an7581_DEVICE_econet_xr1710g-ubi=y" ${{ env.BUILD_DIR }}/.config \
+            || { echo "FAIL: XR1710G device not selected"; exit 1; }
+          grep "CONFIG_PACKAGE_luci-app-mlo=y" ${{ env.BUILD_DIR }}/.config \
+            || { echo "FAIL: luci-app-mlo not selected"; exit 1; }
+          grep "CONFIG_PACKAGE_luci-theme-glass=y" ${{ env.BUILD_DIR }}/.config \
+            || { echo "FAIL: luci-theme-glass not selected"; exit 1; }
+
+      - name: Build tools + toolchain
+        if: steps.cache-tc.outputs.cache-hit != 'true'
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+
+      - name: Quick kernel patch check
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make target/linux/prepare V=s 2>&1 | tail -40
+          exit ${PIPESTATUS[0]}
+
+      - name: Full firmware build
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make -j$(nproc) V=s > build.log 2>&1
+
+      - name: Surface build errors
+        if: failure()
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          echo "=== Last 200 lines of build.log ==="
+          tail -200 build.log
+          echo "=== Error lines ==="
+          grep -niE "error:|Error [0-9]|fatal:|FAILED|stop\.|No rule|No such file|Hunk.*FAILED|Patch failed" build.log | tail -80
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: ${{ env.BUILD_DIR }}/build.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload firmware
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr1710g-firmware
+          path: |
+            ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.itb
+            ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.bin
+          if-no-files-found: warn
+
+      - name: Create Release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.itb
+            ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.bin
+          tag_name: ${{ github.ref_name }}
+          name: XR1710G Firmware ${{ github.ref_name }}
+          body: |
+            Automated XR1710G firmware build atop fanboy offload.
+            Upstream commit: ${{ steps.clone.outputs.upstream_commit }}
+          draft: false
+          prerelease: false
