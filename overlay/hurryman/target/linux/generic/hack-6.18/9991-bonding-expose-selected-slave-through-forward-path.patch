@@ -18,7 +18,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
 --- a/drivers/net/bonding/bond_main.c
 +++ b/drivers/net/bonding/bond_main.c
-@@ -4195,7 +4195,7 @@ static bool bond_flow_dissect(struct bon
+@@ -4201,7 +4201,7 @@ static bool bond_flow_dissect(struct bon
  	return true;
  }
  
@@ -27,7 +27,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  {
  	hash ^= (__force u32)flow_get_u32_dst(flow) ^
  		(__force u32)flow_get_u32_src(flow);
-@@ -4279,6 +4279,41 @@ static u32 bond_xmit_hash_xdp(struct bon
+@@ -4285,6 +4285,41 @@ static u32 bond_xmit_hash_xdp(struct bon
  				sizeof(struct ethhdr), xdp->data_end - xdp->data);
  }
  
@@ -69,7 +69,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  /*-------------------------- Device entry points ----------------------------*/
  
  void bond_work_init_all(struct bonding *bond)
-@@ -5197,37 +5232,34 @@ int bond_update_slave_arr(struct bonding
+@@ -5199,37 +5234,34 @@ out:
  	return ret;
  }
  
@@ -118,7 +118,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  }
  
  static bool bond_should_broadcast_neighbor(struct sk_buff *skb,
-@@ -5424,6 +5456,40 @@ static struct net_device *bond_xmit_get_
+@@ -5426,6 +5458,40 @@ static struct net_device *bond_xmit_get_
  	return NULL;
  }
  
@@ -159,7 +159,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  static void bond_sk_to_flow(struct sock *sk, struct flow_keys *flow)
  {
  	switch (sk->sk_family) {
-@@ -5893,6 +5959,7 @@ static const struct net_device_ops bond_
+@@ -5940,6 +6006,7 @@ static const struct net_device_ops bond_
  	.ndo_features_check	= passthru_features_check,
  	.ndo_get_xmit_slave	= bond_xmit_get_slave,
  	.ndo_sk_get_lower_dev	= bond_sk_get_lower_dev,
@@ -169,7 +169,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  	.ndo_xdp_get_xmit_slave = bond_xdp_get_xmit_slave,
 --- a/include/linux/netdevice.h
 +++ b/include/linux/netdevice.h
-@@ -869,6 +869,7 @@ enum net_device_path_type {
+@@ -874,6 +874,7 @@ enum net_device_path_type {
  	DEV_PATH_ETHERNET = 0,
  	DEV_PATH_VLAN,
  	DEV_PATH_BRIDGE,

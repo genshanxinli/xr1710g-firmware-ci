@@ -18,7 +18,6 @@ allowed_hurryman() {
     package/network/config/firewall4/*|\
     package/network/services/hostapd/*|\
     target/linux/airoha/*|\
-    target/linux/generic/backport-6.18/9910-*|\
     target/linux/generic/hack-6.18/9991-*|\
     target/linux/generic/hack-6.18/9992-*|\
     tools/elfutils/patches/014-*) return 0 ;;
@@ -35,10 +34,6 @@ allowed_yyh() {
     package/network/utils/iwinfo/*|\
     package/utils/ucode/*|\
     target/linux/airoha/*|\
-    target/linux/generic/pending-6.18/675-*|\
-    target/linux/generic/pending-6.18/9990-*|\
-    target/linux/generic/pending-6.18/9991-*|\
-    target/linux/generic/pending-6.18/9992-*|\
     target/linux/generic/pending-6.18/9993-*|\
     target/linux/generic/pending-6.18/9999-*) return 0 ;;
   esac
@@ -96,5 +91,3 @@ yyh_new_files=$yyh_count
 refreshed_at=$(date -u +'%Y-%m-%d %H:%M UTC')
 EOF
 echo "Overlay extraction complete."
-
-
