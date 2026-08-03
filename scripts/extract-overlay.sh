@@ -33,7 +33,9 @@ allowed_yyh() {
     package/network/services/hostapd/*|\
     package/network/utils/iwinfo/*|\
     package/utils/ucode/*|\
-    target/linux/airoha/*|\
+    target/linux/airoha/an7581/*|\
+    target/linux/airoha/base-files/*|\
+    target/linux/airoha/dts/*|\
     target/linux/generic/pending-6.18/9993-*|\
     target/linux/generic/pending-6.18/9999-*) return 0 ;;
   esac
