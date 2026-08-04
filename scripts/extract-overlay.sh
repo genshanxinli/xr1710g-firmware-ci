@@ -35,9 +35,7 @@ allowed_yyh() {
     package/utils/ucode/*|\
     target/linux/airoha/an7581/*|\
     target/linux/airoha/base-files/*|\
-    target/linux/airoha/dts/*|\
-    target/linux/generic/pending-6.18/9993-*|\
-    target/linux/generic/pending-6.18/9999-*) return 0 ;;
+    target/linux/airoha/dts/*) return 0 ;;
   esac
   return 1
 }
