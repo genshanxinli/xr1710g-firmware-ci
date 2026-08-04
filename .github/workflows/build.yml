@@ -164,8 +164,6 @@ jobs:
             ${{ env.BUILD_DIR }}/build_dir/host
             ${{ env.BUILD_DIR }}/build_dir/toolchain-*
           key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: |
-            toolchain-fanboy-
 
       - name: Save ccache
         if: success()
@@ -173,8 +171,6 @@ jobs:
         with:
           path: ~/.ccache
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: |
-            ccache-fanboy-
       - name: Quick kernel patch check
         run: |
           cd ${{ env.BUILD_DIR }}
