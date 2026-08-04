@@ -13,6 +13,9 @@ else
   ROOT="${2:-$ROOT}"
 fi
 
+# Normalize so cp/make still see the CI repo after cd into the OpenWrt tree.
+ROOT="$(cd "$ROOT" && pwd)"
+
 if [ ! -d "$DEST/.git" ]; then
   bash "$ROOT/scripts/clone-base.sh" "$DEST"
 fi
