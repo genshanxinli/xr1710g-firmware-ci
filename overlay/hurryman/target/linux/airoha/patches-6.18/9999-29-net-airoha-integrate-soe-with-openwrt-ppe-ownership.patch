@@ -385,7 +385,7 @@ index 2bb2c7a..648c882 100644
  
  		if (e->type == FLOW_TYPE_L2_SUBFLOW) {
  			state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
-@@ -1528,26 +1650,26 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
+@@ -1773,42 +1773,24 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
  		err = airoha_ppe_foe_commit_entry(ppe, &e->data, hash, rx_wlan);
  		if (bind_started) {
  			if (!err &&
@@ -401,11 +401,31 @@ index 2bb2c7a..648c882 100644
  		}
  committed:
  		commit_done = true;
+-#ifdef CONFIG_NET_SWITCHDEV
+-		/* DIAG (999-90): aggregate per-second count of HW FOE commits
+-		 * reaching this point.  Throttle to one log line per second
+-		 * per PPE instance; each line reports how many commits
+-		 * happened in the last 1 s window.  Per-commit logging is
+-		 * pure spam during sustained throughput and adds no
+-		 * diagnostic value beyond confirming traffic is flowing.
+-		 */
 -		if (rx_wlan) {
--			u32 inst = hash >= PPE_SRAM_NUM_ENTRIES ? 2 : 1;
--			pr_info("DIAG COMMIT h=0x%04x PPE%u ib1=0x%08x\n",
--				hash, inst, e->data.ib1);
+-			static unsigned long diag_commit_last[2];
+-			static u32 diag_commit_count[2];
+-			u32 inst = hash >= PPE_SRAM_NUM_ENTRIES ? 1 : 0;
+-
+-			diag_commit_count[inst]++;
+-			if (time_after(jiffies,
+-				       diag_commit_last[inst] + HZ)) {
+-				pr_info("DIAG COMMIT PPE%u: %u commits/s\n",
+-					inst + 1, diag_commit_count[inst]);
+-				diag_commit_last[inst] = jiffies;
+-				diag_commit_count[inst] = 0;
+-			}
 -		}
+-#endif
+-		e->hash = hash;
+-		airoha_ppe_foe_add_soe_input_owner(ppe, e);
 +		if (!err) {
 +			if (rx_wlan) {
 +				u32 inst = hash >= PPE_SRAM_NUM_ENTRIES ? 2 : 1;
@@ -415,16 +435,14 @@ index 2bb2c7a..648c882 100644
 +			airoha_ppe_foe_claim_entry(ppe, e, hash);
 +			airoha_ppe_foe_add_soe_input_owner(ppe, e);
 +		}
--		e->hash = hash;
--		airoha_ppe_foe_add_soe_input_owner(ppe, e);
 +		break;
  	}
  
 -	if (commit_done || hwe_bound)
 +	if (commit_done)
  		goto unlock;
- 
- 	airoha_ppe_foe_set_bridge_addrs(&br, eth_hdr(skb));
+
+
 @@ -1660,7 +1782,8 @@ committed:
  	if (e)
  		airoha_ppe_foe_commit_subflow_entry(ppe, e, hash, rx_wlan);
