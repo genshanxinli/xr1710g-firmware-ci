@@ -1,0 +1,41 @@
+From 474c99053654e793daf919a6906d0d590b6e7ae4 Mon Sep 17 00:00:00 2001
+From: Jihong Min <hurryman2212@gmail.com>
+Date: Wed, 29 Jul 2026 08:17:56 +0900
+Subject: [PATCH 01/33] net: add packet offload transmit callback
+
+Let packet offload drivers consume skbs that require driver-specific
+transmit preparation before the regular XFRM output path can continue.
+
+Assisted-by: Codex:gpt-5.6
+Signed-off-by: Jihong Min <hurryman2212@gmail.com>
+---
+ include/linux/netdevice.h | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+index 8db25b79573e..557b66fc19f7 100644
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -1048,6 +1048,19 @@ struct xfrmdev_ops {
+ 	int	(*xdo_dev_policy_add) (struct xfrm_policy *x, struct netlink_ext_ack *extack);
+ 	void	(*xdo_dev_policy_delete) (struct xfrm_policy *x);
+ 	void	(*xdo_dev_policy_free) (struct xfrm_policy *x);
++	/* Optional packet-offload TX path for devices that need
++	 * driver-specific transmit preparation instead of continuing through
++	 * the regular XFRM output path, such as adding offload metadata or
++	 * steering the packet to a private transmit queue. The driver consumes
++	 * skb and returns the final transmit status. The driver must call
++	 * xfrm_dev_packet_state_check() once for every final packet it submits,
++	 * including every segment it creates from a GSO skb. The core keeps the
++	 * device offload state alive until the callback returns without holding
++	 * the XFRM state lock. Drivers that retain sk after returning must take
++	 * their own reference; sk may be NULL.
++	 */
++	int	(*xdo_dev_packet_xmit)(struct sock *sk, struct sk_buff *skb,
++				       struct xfrm_state *x);
+ };
+ #endif
+ 
+-- 
+2.53.0
+

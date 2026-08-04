@@ -1,0 +1,31 @@
+From 7d1624aa48c6b494a2eb850ab64b3549c49c186a Mon Sep 17 00:00:00 2001
+From: Jihong Min <hurryman2212@gmail.com>
+Date: Wed, 29 Jul 2026 08:17:56 +0900
+Subject: [PATCH 02/33] xfrm: track packet offload managers per namespace
+
+Add the per-network-namespace list and lock used to notify autonomous
+packet offload managers around policy changes.
+
+Assisted-by: Codex:gpt-5.6
+Signed-off-by: Jihong Min <hurryman2212@gmail.com>
+---
+ include/net/netns/xfrm.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/include/net/netns/xfrm.h b/include/net/netns/xfrm.h
+index b73983a17e08..147f63dffa5f 100644
+--- a/include/net/netns/xfrm.h
++++ b/include/net/netns/xfrm.h
+@@ -50,6 +50,9 @@ struct netns_xfrm {
+ 
+ 	struct list_head	policy_all;
+ 	struct hlist_head	*policy_byidx;
++	atomic_t		policy_genid;
++	atomic_t		policy_change_count;
++	atomic_t		policy_flowtable_unsafe;
+ 	unsigned int		policy_idx_hmask;
+ 	unsigned int		idx_generator;
+ 	struct xfrm_policy_hash	policy_bydst[XFRM_POLICY_MAX];
+-- 
+2.53.0
+
