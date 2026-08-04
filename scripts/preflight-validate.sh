@@ -3,11 +3,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CLONE="${1:?Usage: preflight-validate.sh <openwrt-clone> [--mode=prepare|compile] [--skip-apply]}"
+shift
 MODE="prepare"
 SKIP_APPLY=0
 REPORT="$ROOT/docs/preflight-report.md"
 
-while [ $# -gt 1 ]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --mode=*) MODE="${1#--mode=}" ;;
     --skip-apply) SKIP_APPLY=1 ;;
