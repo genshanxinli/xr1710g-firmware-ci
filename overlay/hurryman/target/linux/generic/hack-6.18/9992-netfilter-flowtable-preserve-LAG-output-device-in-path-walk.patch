@@ -16,9 +16,19 @@ the flow's software output interface.
 Assisted-by: Codex:gpt-5.6
 Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
---- a/net/netfilter/nft_flow_offload.c
-+++ b/net/netfilter/nft_flow_offload.c
-@@ -107,6 +108,41 @@ static int nft_dev_fill_forward_path(str
+diff --git a/net/netfilter/nf_flow_table_path.c b/net/netfilter/nf_flow_table_path.c
+index 92dc3d2..d3d50f1 100644
+--- a/net/netfilter/nf_flow_table_path.c
++++ b/net/netfilter/nf_flow_table_path.c
+@@ -16,6 +16,7 @@
+ #include <net/netfilter/nf_flow_table.h>
+ #include <linux/if_bridge.h>
+ #include <linux/if_ether.h>
++#include <net/flow_dissector.h>
+ #include <net/route.h>
+ #include <net/ip6_route.h>
+ 
+@@ -85,6 +86,41 @@ out:
  	return __dev_fill_forward_path(ctx, ha, stack);
  }
  
@@ -60,7 +70,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  struct nft_forward_info {
  	const struct net_device *indev;
  	const struct net_device *outdev;
-@@ -172,12 +172,17 @@ static void nft_dev_path_info(const stru
+@@ -116,12 +152,17 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
  		case DEV_PATH_ETHERNET:
  		case DEV_PATH_DSA:
  		case DEV_PATH_VLAN:
@@ -78,7 +88,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  			if (path->type == DEV_PATH_DSA) {
  				i = stack->num_paths;
  				break;
-@@ -253,10 +294,13 @@ static int nft_dev_forward_path(const st
+@@ -217,10 +258,13 @@ static int nft_dev_forward_path(const struct nft_pktinfo *pkt,
  		.dev	= dst->dev,
  	};
  	struct nft_forward_info info = {};
@@ -90,5 +100,5 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 +	nft_flow_keys_init(ct, dir, &flow);
 +	ctx.flow = &flow;
  
- 	if (nft_flow_offload_is_bridging(pkt->skb)) {
+ 	if (is_bridging) {
  		enum ip_conntrack_info pkt_ctinfo;
