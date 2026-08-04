@@ -1,24 +1,19 @@
-From f324a289a756ed67f165dc9bc47ee59ca9f101e0 Mon Sep 17 00:00:00 2001
 From: Jihong Min <hurryman2212@gmail.com>
-Date: Wed, 29 Jul 2026 08:17:57 +0900
-Subject: [PATCH 14/33] netfilter: flowtable: discover XFRM state for flow
- routes
+Subject: [PATCH] netfilter: flowtable: discover XFRM state for flow routes
 
 Recognize authenticated inbound packet-offload state and eligible
 outbound XFRM routes while rejecting unsafe or ambiguous policy
-combinations.
+combinations. Adapted from the hurryman nft_flow_offload.c layout to
+fanboy's nf_flow_table_path.c layout.
 
 Assisted-by: Codex:gpt-5.6
 Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
- net/netfilter/nft_flow_offload.c | 94 ++++++++++++++++++++++++++++++--
- 1 file changed, 90 insertions(+), 4 deletions(-)
-
-diff --git a/net/netfilter/nft_flow_offload.c b/net/netfilter/nft_flow_offload.c
-index 639f07a..0d9815b 100644
---- a/net/netfilter/nft_flow_offload.c
-+++ b/net/netfilter/nft_flow_offload.c
-@@ -17,6 +17,7 @@
+diff --git a/net/netfilter/nf_flow_table_path.c b/net/netfilter/nf_flow_table_path.c
+index 10ef70c..00c4a73 100644
+--- a/net/netfilter/nf_flow_table_path.c
++++ b/net/netfilter/nf_flow_table_path.c
+@@ -14,6 +14,7 @@
  #include <net/netfilter/nf_conntrack_core.h>
  #include <net/netfilter/nf_conntrack_extend.h>
  #include <net/netfilter/nf_flow_table.h>
@@ -26,11 +21,10 @@ index 639f07a..0d9815b 100644
  #include <linux/if_bridge.h>
  #include <linux/if_ether.h>
  #include <net/route.h>
-@@ -34,6 +35,24 @@ static enum flow_offload_xmit_type nft_xmit_type(struct dst_entry *dst)
+@@ -28,6 +29,22 @@ static enum flow_offload_xmit_type nft_xmit_type(struct dst_entry *dst)
  	return FLOW_OFFLOAD_XMIT_NEIGH;
  }
  
-+#if IS_ENABLED(CONFIG_XFRM)
 +static bool nft_flow_route_needs_xfrm_input(const struct nf_flow_route *route,
 +					    enum ip_conntrack_dir dir)
 +{
@@ -46,12 +40,11 @@ index 639f07a..0d9815b 100644
 +
 +	return false;
 +}
-+#endif
 +
  static void nft_default_forward_path(struct nf_flow_route *route,
  				     struct dst_entry *dst_cache,
  				     enum ip_conntrack_dir dir)
-@@ -367,6 +386,10 @@ static int nft_flow_route_routing(const struct nft_pktinfo *pkt,
+@@ -352,6 +369,10 @@ int nft_flow_route_routing(const struct nft_pktinfo *pkt,
  {
  	struct dst_entry *this_dst = skb_dst(pkt->skb);
  	struct dst_entry *other_dst = NULL;
@@ -62,7 +55,7 @@ index 639f07a..0d9815b 100644
  	struct flowi fl;
  
  	if (!this_dst)
-@@ -382,6 +405,10 @@ static int nft_flow_route_routing(const struct nft_pktinfo *pkt,
+@@ -367,6 +388,10 @@ int nft_flow_route_routing(const struct nft_pktinfo *pkt,
  		fl.u.ip4.flowi4_dscp = ip4h_dscp(ip_hdr(pkt->skb));
  		fl.u.ip4.flowi4_mark = pkt->skb->mark;
  		fl.u.ip4.flowi4_flags = FLOWI_FLAG_ANYSRC;
@@ -73,7 +66,7 @@ index 639f07a..0d9815b 100644
  		break;
  	case NFPROTO_IPV6:
  		fl.u.ip6.daddr = ct->tuplehash[dir].tuple.src.u3.in6;
-@@ -391,6 +418,10 @@ static int nft_flow_route_routing(const struct nft_pktinfo *pkt,
+@@ -376,6 +401,10 @@ int nft_flow_route_routing(const struct nft_pktinfo *pkt,
  		fl.u.ip6.flowlabel = ip6_flowinfo(ipv6_hdr(pkt->skb));
  		fl.u.ip6.flowi6_mark = pkt->skb->mark;
  		fl.u.ip6.flowi6_flags = FLOWI_FLAG_ANYSRC;
@@ -84,7 +77,7 @@ index 639f07a..0d9815b 100644
  		break;
  	}
  
-@@ -403,16 +434,71 @@ static int nft_flow_route_routing(const struct nft_pktinfo *pkt,
+@@ -388,16 +417,71 @@ int nft_flow_route_routing(const struct nft_pktinfo *pkt,
  		return -ENOENT;
  	}
  
@@ -159,6 +152,4 @@ index 639f07a..0d9815b 100644
 +#endif
  }
  
- static int
--- 
-2.53.0
+ int nft_flow_route_bridging(const struct nft_pktinfo *pkt,
