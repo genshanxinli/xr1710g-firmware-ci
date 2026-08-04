@@ -1129,7 +1129,7 @@ index b9a5c36..267d5f0 100644
  
  	return airoha_setup_phylink(netdev);
  }
-@@ -4079,11 +4747,16 @@ static int airoha_probe(struct platform_device *pdev)
+@@ -4079,12 +4747,17 @@ static int airoha_probe(struct platform_device *pdev)
  	eth->napi_dev->threaded = true;
  	strscpy(eth->napi_dev->name, "qdma_eth", sizeof(eth->napi_dev->name));
  	platform_set_drvdata(pdev, eth);
@@ -1139,13 +1139,14 @@ index b9a5c36..267d5f0 100644
  	if (err)
  		goto error_netdev_free;
  
+ 	INIT_DELAYED_WORK(&eth->cdm_kick_work, airoha_fe_cdm_kick_work);
+ 	schedule_delayed_work(&eth->cdm_kick_work, 60 * HZ);
+ 
 +	err = airoha_soe_init(eth);
 +	if (err)
 +		goto error_hw_cleanup;
 +
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++) {
- 		airoha_qdma_start_napi(&eth->qdma[i]);
- 		airoha_qdma_set(&eth->qdma[i], REG_QDMA_GLOBAL_CFG,
 @@ -4101,17 +4774,54 @@ static int airoha_probe(struct platform_device *pdev)
  		err = airoha_alloc_gdm_port(eth, np);
  		if (err) {
@@ -2251,11 +2252,11 @@ index 6b49073..d2b568e 100644
  
  	if (type == PPE_PKT_TYPE_BRIDGE)
  		return airoha_ppe_foe_l2_flow_commit_entry(ppe, e);
-@@ -1138,10 +1772,181 @@ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
- 	e->hash = 0xffff;
- 
- 	spin_lock_bh(&ppe_lock);
--	hlist_add_head(&e->list, &ppe->foe_flow[hash]);
+@@ -1828,7 +1828,15 @@ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
+ #endif
+  
+  	spin_lock_bh(&ppe_lock);
+- 	hlist_add_head(&e->list, &ppe->foe_flow[hash]);
 +	if (e->soe_flow.sa && !e->soe_flow.input) {
 +		u32 soe_hash;
 +
@@ -2265,11 +2266,17 @@ index 6b49073..d2b568e 100644
 +	}
 +	if (!err)
 +		hlist_add_head(&e->list, &ppe->foe_flow[hash]);
- 	spin_unlock_bh(&ppe_lock);
+  	spin_unlock_bh(&ppe_lock);
+ #ifdef CONFIG_NET_SWITCHDEV
+ 	/* DIAG (999-90): a NEW SW flow_offload entry just got armed --
+@@ -1856,7 +1864,171 @@ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
+ 	}
+ #endif
  
--	return 0;
-+	return err;
+- 	return 0;
++ 	return err;
 +}
++
 +
 +static bool
 +airoha_ppe_foe_entry_matches_input_xfrm(const struct airoha_foe_entry *hwe,
@@ -2444,7 +2451,7 @@ index 6b49073..d2b568e 100644
  
  	hwe_p = airoha_ppe_foe_get_entry_locked(ppe, e->hash);
  	if (!hwe_p)
-@@ -1239,18 +2046,26 @@ static int airoha_ppe_entry_idle_time(struct airoha_ppe *ppe,
+@@ -1956,18 +2128,26 @@ static int airoha_ppe_entry_idle_time(struct airoha_ppe *ppe,
  }
  
  static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
@@ -2471,9 +2478,9 @@ index 6b49073..d2b568e 100644
 +	if (is_flowtable)
 +		tuple = (const void *)f->cookie;
 +
- 	if (rhashtable_lookup(&eth->flow_table, &f->cookie,
- 			      airoha_flow_table_params))
- 		return -EEXIST;
+ 	e = rhashtable_lookup(&eth->flow_table, &f->cookie,
+ 			      airoha_flow_table_params);
+ #ifdef CONFIG_NET_SWITCHDEV
 @@ -1317,6 +2132,8 @@ static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
  
  			if (act->mangle.htype == FLOW_ACT_MANGLE_HDR_TYPE_ETH)
@@ -2587,7 +2594,7 @@ index 6b49073..d2b568e 100644
  free_entry:
  	kfree(e);
  
-@@ -1328,20 +2213,148 @@ static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
+@@ -2295,16 +2475,35 @@ static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
  					   struct flow_cls_offload *f)
  {
  	struct airoha_flow_table_entry *e;
@@ -2621,7 +2628,10 @@ index 6b49073..d2b568e 100644
  	kfree(e);
 +	if (quiesced)
 +		airoha_ppe_soe_resume(eth);
- 
+ #ifdef CONFIG_NET_SWITCHDEV
+ 	/* DIAG (999-90): the SW flow_offload teardown chain
+ 	 * (FLOW_CLS_DESTROY -> airoha_ppe_flow_offload_destroy) just
+@@ -2319,6 +2518,116 @@ static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
  	return 0;
  }
  
@@ -2733,6 +2743,7 @@ index 6b49073..d2b568e 100644
 +	}
 +	mutex_unlock(&flow_offload_mutex);
 +}
++
 +
  /* ---- flush stale PPE flows on bridge FDB / WiFi STA MAC events -------- */
  
