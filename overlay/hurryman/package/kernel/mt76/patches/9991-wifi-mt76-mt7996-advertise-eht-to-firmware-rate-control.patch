@@ -20,7 +20,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2832,6 +2832,9 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_b
+@@ -2589,6 +2589,9 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_b
  			ra->af = le16_get_bits(link_sta->he_6ghz_capa.capa,
  					       IEEE80211_HE_6GHZ_CAP_MAX_AMPDU_LEN_EXP);
  	}
