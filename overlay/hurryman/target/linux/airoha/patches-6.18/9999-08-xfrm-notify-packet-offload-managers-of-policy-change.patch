@@ -165,8 +165,7 @@ index 932a313b9460..35bfc690cadf 100644
  	}
  
  	list_add(&pol->walk.all, &net->xfrm.policy_all);
--	net->xfrm.policy_count[dir]++;
-+	WRITE_ONCE(net->xfrm.policy_count[dir], net->xfrm.policy_count[dir] + 1);
+ 	WRITE_ONCE(net->xfrm.policy_count[dir], net->xfrm.policy_count[dir] + 1);
 +	if (dir < XFRM_POLICY_MAX &&
 +	    (pol->mark.m || pol->if_id || pol->security))
 +		atomic_inc(&net->xfrm.policy_flowtable_unsafe);
@@ -177,8 +176,7 @@ index 932a313b9460..35bfc690cadf 100644
  	}
  
  	list_del_init(&pol->walk.all);
--	net->xfrm.policy_count[dir]--;
-+	WRITE_ONCE(net->xfrm.policy_count[dir], net->xfrm.policy_count[dir] - 1);
+ 	WRITE_ONCE(net->xfrm.policy_count[dir], net->xfrm.policy_count[dir] - 1);
 +	if (dir < XFRM_POLICY_MAX &&
 +	    (pol->mark.m || pol->if_id || pol->security))
 +		atomic_dec(&net->xfrm.policy_flowtable_unsafe);
