@@ -19,7 +19,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2294,6 +2294,15 @@ mt7996_mcu_sta_bfer_eht(struct ieee80211
+@@ -2051,6 +2051,15 @@ mt7996_mcu_sta_bfer_eht(struct ieee80211
  		bf->ncol_gt_bw80 = nss_mcs;
  		break;
  	case IEEE80211_STA_RX_BW_320:
@@ -35,7 +35,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  		snd_dim = EHT_PHY(CAP2_SOUNDING_DIM_320MHZ_MASK, ve->phy_cap_info[2]) +
  			  (EHT_PHY(CAP3_SOUNDING_DIM_320MHZ_MASK,
  				   ve->phy_cap_info[3]) << 1);
-@@ -2301,8 +2310,8 @@ mt7996_mcu_sta_bfer_eht(struct ieee80211
+@@ -2058,8 +2067,8 @@ mt7996_mcu_sta_bfer_eht(struct ieee80211
  		nss_mcs = u8_get_bits(eht_nss->bw._320.rx_tx_mcs9_max_nss,
  				      IEEE80211_EHT_MCS_NSS_RX) - 1;
  

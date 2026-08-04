@@ -10,7 +10,7 @@ on same-BSS STA reconnect.
 
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1512,16 +1512,9 @@
+@@ -1416,16 +1416,9 @@
  		case MT76_STA_EVENT_DISASSOC:
  			for (i = 0; i < ARRAY_SIZE(msta_link->twt.flow); i++)
  				mt7996_mac_twt_teardown_flow(dev, link,
