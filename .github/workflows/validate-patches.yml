@@ -1,0 +1,247 @@
+name: Validate Patches
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validation mode
+        required: false
+        default: prepare
+        type: choice
+        options:
+          - prepare
+          - compile
+      include_candidates:
+        description: Include candidates
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_DIR: openwrt
+  CI_REPO: ci-repo
+  GLASS_REPO: rchen14b/luci-theme-glass
+  GLASS_REF: v1.1.6
+  CCACHE_MAXSIZE: 6G
+  CCACHE_COMPRESS: "1"
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      candidates: ${{ steps.filter.outputs.candidates }}
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            candidates:
+              - 'candidates/**'
+
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+      - name: Check shell scripts
+        run: |
+          bash -n apply-patches.sh scripts/*.sh
+          git diff --check
+
+  baseline-prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+        with:
+          path: ci-repo
+      - name: Clone locked fanboy offload base
+        id: clone
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/clone-base.sh ${{ env.BUILD_DIR }}
+          echo "upstream_commit=$(git -C ${{ env.BUILD_DIR }} rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Prepare cache paths
+        run: |
+          mkdir -p ${{ env.BUILD_DIR }}/dl ${{ env.BUILD_DIR }}/feeds ${{ env.BUILD_DIR }}/.ccache
+      - name: Restore dl cache
+        id: cache-dl
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: dl-fanboy-
+      - name: Restore feeds cache
+        id: cache-feeds
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/feeds
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: feeds-fanboy-
+      - name: Restore toolchain cache
+        id: cache-tc
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: toolchain-fanboy-
+      - name: Restore ccache
+        id: cache-ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: ccache-fanboy-
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ninja-build meson \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev gawk flex bison gettext \
+            unzip file rsync git subversion swig ecj libtool-bin autoconf automake
+      - name: Set up validation tree
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/setup-validate-tree.sh \
+            --existing ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
+      - name: Download sources
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make download -j$(nproc)
+      - name: Build tools + toolchain
+        if: steps.cache-tc.outputs.cache-hit != 'true'
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+      - name: Run preflight
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
+            ${{ env.BUILD_DIR }} --mode=${{ inputs.mode || 'prepare' }} --skip-apply
+      - name: Upload preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-preflight-report
+          path: ${{ env.CI_REPO }}/docs/preflight-report.md
+          if-no-files-found: warn
+          retention-days: 7
+
+  candidate-prepare:
+    runs-on: ubuntu-24.04
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.include_candidates == 'true'
+      || needs.changes.outputs.candidates == 'true'
+    needs: changes
+    continue-on-error: true
+    timeout-minutes: 180
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+        with:
+          path: ci-repo
+      - name: Clone locked fanboy offload base
+        id: clone
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/clone-base.sh ${{ env.BUILD_DIR }}
+          echo "upstream_commit=$(git -C ${{ env.BUILD_DIR }} rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Prepare cache paths
+        run: |
+          mkdir -p ${{ env.BUILD_DIR }}/dl ${{ env.BUILD_DIR }}/feeds ${{ env.BUILD_DIR }}/.ccache
+      - name: Restore dl cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: dl-fanboy-
+      - name: Restore feeds cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/feeds
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: feeds-fanboy-
+      - name: Restore toolchain cache
+        id: cache-tc
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: toolchain-fanboy-
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: ccache-fanboy-
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ninja-build meson \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev gawk flex bison gettext \
+            unzip file rsync git subversion swig ecj libtool-bin autoconf automake
+      - name: Set up validation tree
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/setup-validate-tree.sh \
+            --existing ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
+      - name: Download sources
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make download -j$(nproc)
+      - name: Build tools + toolchain
+        if: steps.cache-tc.outputs.cache-hit != 'true'
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+      - name: Apply candidates
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/apply-candidates.sh \
+            ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}/docs/candidate-report.md
+      - name: Run candidate preflight
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
+            ${{ env.BUILD_DIR }} --mode=prepare --skip-apply \
+            --report=${{ env.CI_REPO }}/docs/candidate-preflight-report.md
+      - name: Upload candidate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-report
+          path: |
+            ${{ env.CI_REPO }}/docs/candidate-report.md
+            ${{ env.CI_REPO }}/docs/candidate-preflight-report.md
+          if-no-files-found: warn
+          retention-days: 7
+
+  config:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+        with:
+          path: ci-repo
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ninja-build meson \
+            libelf-dev libssl-dev libncurses-dev zlib1g-dev gawk flex bison gettext \
+            unzip file rsync git subversion swig ecj libtool-bin autoconf automake
+      - name: Set up validation tree
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/setup-validate-tree.sh ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
+      - name: Verify config
+        run: |
+          grep "CONFIG_TARGET_airoha_an7581_DEVICE_econet_xr1710g-ubi=y" ${{ env.BUILD_DIR }}/.config
+          grep "CONFIG_PACKAGE_luci-app-mlo=y" ${{ env.BUILD_DIR }}/.config
+          grep "CONFIG_PACKAGE_luci-theme-glass=y" ${{ env.BUILD_DIR }}/.config

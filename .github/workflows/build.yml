@@ -13,6 +13,7 @@ env:
   GLASS_REPO: rchen14b/luci-theme-glass
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt
+  CI_REPO: ci-repo
   CCACHE_MAXSIZE: 6G
   CCACHE_COMPRESS: "1"
 
@@ -26,12 +27,11 @@ jobs:
         with:
           path: ci-repo
 
-      - name: Clone fanboy offload base
+      - name: Clone locked fanboy offload base
         id: clone
         run: |
           for i in 1 2 3 4 5; do
-            if git clone --depth=1 --single-branch --branch ${{ env.OW1700K_BRANCH }} \
-              https://github.com/${{ env.OW1700K_REPO }}.git ${{ env.BUILD_DIR }}; then
+            if bash ${{ env.CI_REPO }}/scripts/clone-base.sh ${{ env.BUILD_DIR }}; then
               break
             fi
             echo "Clone attempt $i failed"
@@ -39,9 +39,8 @@ jobs:
             sleep 20
           done
           test -d ${{ env.BUILD_DIR }}
-          cd ${{ env.BUILD_DIR }}
-          echo "upstream_commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-          echo "Cloned upstream commit: $(git rev-parse HEAD)"
+          echo "upstream_commit=$(git -C ${{ env.BUILD_DIR }} rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "Cloned upstream commit: $(git -C ${{ env.BUILD_DIR }} rev-parse HEAD)"
 
       - name: Prepare dl cache path
         run: |
@@ -103,26 +102,13 @@ jobs:
 
       - name: Apply XR1710G overlays
         run: |
-          bash ci-repo/apply-patches.sh ${{ env.BUILD_DIR }} ci-repo
+          bash ${{ env.CI_REPO }}/apply-patches.sh ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
 
       - name: Clone luci-theme-glass
         run: |
           git clone --depth=1 --branch ${{ env.GLASS_REF }} \
             https://github.com/${{ env.GLASS_REPO }}.git \
             ${{ env.BUILD_DIR }}/package/luci-theme-glass
-
-      - name: Verify overlay applied
-        run: |
-          echo "=== DTS ==="
-          test -f ${{ env.BUILD_DIR }}/target/linux/airoha/dts/an7581-xr1710g-ubi.dts \
-            || { echo "FAIL: DTS missing"; exit 1; }
-          echo "=== Device block ==="
-          grep -q econet_xr1710g ${{ env.BUILD_DIR }}/target/linux/airoha/image/an7581.mk \
-            || { echo "FAIL: device not in an7581.mk"; exit 1; }
-          echo "=== YYH kernel patches ==="
-          ls ${{ env.BUILD_DIR }}/target/linux/airoha/patches-6.18/330-* \
-             ${{ env.BUILD_DIR }}/target/linux/airoha/patches-6.18/921-* \
-            || { echo "FAIL: unique airoha patches missing"; exit 1; }
 
       - name: Update feeds
         run: |
@@ -151,7 +137,7 @@ jobs:
       - name: Configure
         run: |
           cd ${{ env.BUILD_DIR }}
-          cp ../ci-repo/defconfig .config
+          cp ../${{ env.CI_REPO }}/defconfig .config
           make defconfig
 
       - name: Verify config
@@ -221,16 +207,21 @@ jobs:
             ${{ env.BUILD_DIR }}/build_dir/toolchain-*
           key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
 
-      - name: Quick kernel patch check
+      - name: Run patch preflight
         run: |
-          cd ${{ env.BUILD_DIR }}
-          make target/linux/prepare V=s 2>&1 | tail -40
-          exit ${PIPESTATUS[0]}
+          bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
+            ${{ env.BUILD_DIR }} --mode=prepare --skip-apply
 
       - name: Full firmware build
         run: |
           cd ${{ env.BUILD_DIR }}
-          make -j$(nproc) V=s > build.log 2>&1
+          make -k -j$(nproc) V=s > build.log 2>&1
+
+      - name: Collect build failures
+        if: always()
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/collect-build-errors.sh \
+            ${{ env.BUILD_DIR }}/build.log ${{ env.CI_REPO }}/docs/build-failures.md
 
       - name: Check ccache cache
         id: check-ccache
@@ -254,10 +245,25 @@ jobs:
         if: failure()
         run: |
           cd ${{ env.BUILD_DIR }}
-          echo "=== Last 200 lines of build.log ==="
-          tail -200 build.log
-          echo "=== Error lines ==="
-          grep -niE "error:|Error [0-9]|fatal:|FAILED|stop\.|No rule|No such file|Hunk.*FAILED|Patch failed" build.log | tail -80
+          if [ -f build.log ]; then
+            echo "=== Last 200 lines of build.log ==="
+            tail -200 build.log
+            echo "=== Error lines ==="
+            grep -niE "error:|Error [0-9]|fatal:|FAILED|stop\.|No rule|No such file|Hunk.*FAILED|Patch failed" build.log | tail -80
+          else
+            echo "No build.log was produced; see validation reports."
+          fi
+
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-reports
+          path: |
+            ${{ env.CI_REPO }}/docs/preflight-report.md
+            ${{ env.CI_REPO }}/docs/build-failures.md
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload build log
         if: always()

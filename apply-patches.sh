@@ -35,40 +35,45 @@ copy_patch_files() {
     [ -f "$p" ] || continue
     if [ ! -e "$dst/$(basename "$p")" ]; then
       cp -p "$p" "$dst/"
+    else
+      echo "  skip existing target patch: $(basename "$p")"
     fi
   done
 }
 
+remove_conflicting_patch() {
+  local dst="$1" reason="$2"
+  if [ -f "$CLONE/$dst" ]; then
+    rm -f "$CLONE/$dst"
+    echo "  removed upstream patch: $dst ($reason)"
+  else
+    echo "  upstream patch already absent: $dst"
+  fi
+}
+
 apply_patch_dir() {
-  local dir="$1" name="$2" p before after
+  local dir="$1" name="$2" p
   [ -d "$dir" ] || return 0
   echo "[patch] $name"
   while IFS= read -r -d '' p; do
-    before="$(find "$CLONE" -name '*.rej' | wc -l)"
     if ! patch -p1 --batch --forward -d "$CLONE" < "$p" > /tmp/patch-$$.log 2>&1; then
       if grep -qiE "Reversed|previously applied" /tmp/patch-$$.log; then
         echo "  skip already applied: $(basename "$p")"
-        find "$CLONE" -name '*.rej' -delete 2>/dev/null
         rm -f /tmp/patch-$$.log
         continue
       fi
-      after="$(find "$CLONE" -name '*.rej' | wc -l)"
-      if [ "$after" -gt "$before" ]; then
-        echo "FAILED patch: $p"
-        cat /tmp/patch-$$.log
-        rm -f /tmp/patch-$$.log
-        exit 1
-      fi
+      echo "FAILED patch: $p"
+      cat /tmp/patch-$$.log
+      rm -f /tmp/patch-$$.log
+      exit 1
     fi
     rm -f /tmp/patch-$$.log
   done < <(find "$dir" -type f -name '*.patch' -print0 | sort -z)
 }
 
 echo "Applying XR1710G overlays to $CLONE"
-# Fanboy regdb 555 conflicts with the YYH W1700K overrides; 520/530 carry the same fixes.
-rm -f "$CLONE/package/firmware/wireless-regdb/patches/555-w1700k-fix.patch"
-# The YYH 101 iwinfo patch already carries the same txpower fix as fanboy 999.
-rm -f "$CLONE/package/network/utils/iwinfo/patches/999-fix-txpower-list.patch"
+remove_conflicting_patch "package/firmware/wireless-regdb/patches/555-w1700k-fix.patch" "YYH 520/530 carry the same fixes"
+remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-list.patch" "YYH 101 carries the same txpower fix"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
@@ -84,6 +89,11 @@ test -f "$CLONE/target/linux/airoha/dts/an7581-xr1710g-ubi.dts" \
   || { echo "FAIL: XR1710G DTS missing"; exit 1; }
 grep -q "econet_xr1710g" "$CLONE/target/linux/airoha/image/an7581.mk" \
   || { echo "FAIL: XR1710G device block missing"; exit 1; }
+if find "$CLONE" -name '*.rej' | grep -q .; then
+  echo "FAIL: patch reject files remain after apply:"
+  find "$CLONE" -name '*.rej'
+  exit 1
+fi
 ls "$CLONE"/target/linux/airoha/patches-6.18/330-* \
    "$CLONE"/target/linux/airoha/patches-6.18/921-* >/dev/null 2>&1 \
   || { echo "FAIL: YYH kernel patch files missing"; exit 1; }
