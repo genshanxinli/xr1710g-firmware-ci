@@ -17,6 +17,7 @@ allowed_hurryman() {
     package/kernel/mt76/*|\
     package/network/config/firewall4/*|\
     package/network/services/hostapd/*|\
+    target/linux/airoha/patches-6.18/9999-*|\
     target/linux/generic/hack-6.18/9991-*|\
     target/linux/generic/hack-6.18/9992-*|\
     tools/elfutils/patches/014-*) return 0 ;;
@@ -34,9 +35,7 @@ allowed_yyh() {
     package/utils/ucode/*|\
     target/linux/airoha/an7581/*|\
     target/linux/airoha/base-files/*|\
-    target/linux/airoha/dts/*|\
-    target/linux/generic/pending-6.18/9993-*|\
-    target/linux/generic/pending-6.18/9999-*) return 0 ;;
+    target/linux/airoha/dts/*) return 0 ;;
   esac
   return 1
 }

@@ -1,0 +1,189 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jihong Min <hurryman2212@gmail.com>
+Date: Fri, 31 Jul 2026 12:58:26 +0900
+Subject: [PATCH] net: airoha: synchronously tear down flows when flushing SOE
+
+An XFRM state flush removes its associated SOE and PPE entries, but the
+originating nf_flowtable flow can remain alive with route metadata that
+references the retired state. Active connections then keep using the stale
+flow after a CHILD_SA rekey and cannot install replacement hardware flows.
+
+Mark the originating flows for teardown during a driver-initiated SOE
+flush. After releasing the driver flow lock, synchronously drain the
+already pending flowtable teardown work so subsequent packets can build
+flows for the new SA. Skip synthetic input-owner entries, which have no
+corresponding flowtable object.
+
+Assisted-by: Codex:gpt-5.6
+Signed-off-by: Jihong Min <hurryman2212@gmail.com>
+---
+ drivers/net/ethernet/airoha/airoha_ppe.c | 51 ++++++++++++++++++++++--
+ include/net/netfilter/nf_flow_table.h    |  1 +
+ net/netfilter/nf_flow_table_core.c       | 14 +++++++
+ 3 files changed, 63 insertions(+), 3 deletions(-)
+
+--- a/include/net/netfilter/nf_flow_table.h
++++ b/include/net/netfilter/nf_flow_table.h
+@@ -309,6 +309,7 @@
+ struct flow_offload_tuple_rhash *flow_offload_lookup(struct nf_flowtable *flow_table,
+ 						     struct flow_offload_tuple *tuple);
+ void nf_flow_table_gc_run(struct nf_flowtable *flow_table);
++void nf_flow_table_gc_sync(void);
+ void nf_flow_table_gc_cleanup(struct nf_flowtable *flowtable,
+ 			      struct net_device *dev);
+ void nf_flow_table_cleanup(struct net_device *dev);
+--- a/net/netfilter/nf_flow_table_core.c
++++ b/net/netfilter/nf_flow_table_core.c
+@@ -691,6 +691,20 @@
+ 	nf_flow_table_iterate(flow_table, nf_flow_offload_gc_step, NULL);
+ }
+ 
++void nf_flow_table_gc_sync(void)
++{
++	struct nf_flowtable *flowtable;
++
++	mutex_lock(&flowtable_lock);
++	list_for_each_entry(flowtable, &flowtables, list) {
++		nf_flow_table_offload_flush(flowtable);
++		nf_flow_table_gc_run(flowtable);
++		nf_flow_table_offload_flush_cleanup(flowtable);
++	}
++	mutex_unlock(&flowtable_lock);
++}
++EXPORT_SYMBOL_GPL(nf_flow_table_gc_sync);
++
+ static void nf_flow_offload_work_gc(struct work_struct *work)
+ {
+ 	struct nf_flowtable *flow_table;
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -2539,17 +2539,47 @@
+ 	return 0;
+ }
+ 
+-static void
++static bool
+ airoha_ppe_soe_flow_release(struct airoha_soe_ppe_flow *flow)
+ {
+ 	struct airoha_flow_table_entry *e;
+ 	bool input_owner;
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	bool teardown = false;
++#endif
+ 
+ 	e = container_of(flow, struct airoha_flow_table_entry, soe_flow);
+ 	input_owner = e->type == FLOW_TYPE_SOE_INPUT_OWNER;
++	/* A driver-initiated SA flush otherwise leaves the flowtable entry
++	 * pointing at the retired XFRM state and prevents a later hardware
++	 * refresh from installing the replacement SA.
++	 */
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	if (!input_owner) {
++		struct flow_offload_tuple_rhash *tuplehash;
++		struct flow_offload_tuple *tuple;
++		struct flow_offload *nf_flow;
++		int dir;
++
++		tuple = (void *)e->cookie;
++		tuplehash = container_of(tuple, struct flow_offload_tuple_rhash,
++					 tuple);
++		dir = tuple->dir;
++		nf_flow = container_of(tuplehash, struct flow_offload,
++				       tuplehash[dir]);
++		flow_offload_teardown(nf_flow);
++		teardown = true;
++	}
++#endif
+ 	airoha_soe_ppe_flow_del(flow);
+ 	if (input_owner)
+ 		kfree(e);
++
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	return teardown;
++#else
++	return false;
++#endif
+ }
+ 
+ int airoha_ppe_soe_flush_sa(struct airoha_eth *eth,
+@@ -2557,6 +2587,7 @@
+ {
+ 	LIST_HEAD(failed);
+ 	struct airoha_soe_ppe_flow *flow;
++	bool teardown = false;
+ 	int err = 0;
+ 
+ 	if (!eth || !eth->ppe || !sa)
+@@ -2574,7 +2605,7 @@
+ 			if (!err)
+ 				err = ret;
+ 		} else {
+-			airoha_ppe_soe_flow_release(flow);
++			teardown |= airoha_ppe_soe_flow_release(flow);
+ 		}
+ 	}
+ 	while (!list_empty(&failed)) {
+@@ -2584,6 +2615,10 @@
+ 		airoha_soe_ppe_flow_restore(flow);
+ 	}
+ 	mutex_unlock(&flow_offload_mutex);
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	if (teardown)
++		nf_flow_table_gc_sync();
++#endif
+ 
+ 	return err;
+ }
+@@ -2593,6 +2628,7 @@
+ {
+ 	LIST_HEAD(failed);
+ 	struct airoha_soe_ppe_flow *flow;
++	bool teardown = false;
+ 	int err = 0;
+ 
+ 	if (!eth || !eth->ppe || !soe)
+@@ -2610,7 +2646,7 @@
+ 			if (!err)
+ 				err = ret;
+ 		} else {
+-			airoha_ppe_soe_flow_release(flow);
++			teardown |= airoha_ppe_soe_flow_release(flow);
+ 		}
+ 	}
+ 	while (!list_empty(&failed)) {
+@@ -2620,6 +2656,10 @@
+ 		airoha_soe_ppe_flow_restore(flow);
+ 	}
+ 	mutex_unlock(&flow_offload_mutex);
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	if (teardown)
++		nf_flow_table_gc_sync();
++#endif
+ 
+ 	return err;
+ }
+@@ -2628,6 +2668,7 @@
+ 			      struct airoha_soe_sa *sa)
+ {
+ 	struct airoha_soe_ppe_flow *flow;
++	bool teardown = false;
+ 
+ 	if (!eth || !eth->ppe || !sa)
+ 		return;
+@@ -2643,9 +2684,13 @@
+ 				hlist_del_init(&e->list);
+ 			spin_unlock_bh(&ppe_lock);
+ 		}
+-		airoha_ppe_soe_flow_release(flow);
++		teardown |= airoha_ppe_soe_flow_release(flow);
+ 	}
+ 	mutex_unlock(&flow_offload_mutex);
++#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
++	if (teardown)
++		nf_flow_table_gc_sync();
++#endif
+ }
+ 
+ /* ---- flush stale PPE flows on bridge FDB / WiFi STA MAC events -------- */
+-- 
+2.53.0
