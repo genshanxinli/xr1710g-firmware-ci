@@ -57,7 +57,7 @@ apply_patch_dir() {
   echo "[patch] $name"
   while IFS= read -r -d '' p; do
     if ! patch -p1 --batch --forward -d "$CLONE" < "$p" > /tmp/patch-$$.log 2>&1; then
-      if grep -qiE "Reversed|previously applied" /tmp/patch-$$.log; then
+      if grep -qiE "Reversed|previously applied|already exists|Skipping patch|hunk ignored" /tmp/patch-$$.log; then
         echo "  skip already applied: $(basename "$p")"
         rm -f /tmp/patch-$$.log
         continue
