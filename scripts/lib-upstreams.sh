@@ -27,7 +27,8 @@ import json, sys
 path, key, sha = sys.argv[1], sys.argv[2], sys.argv[3]
 data = json.load(open(path, encoding='utf-8'))
 data[key] = sha
-data['updated_at'] = '2026-08-03T00:00:00Z'
+import datetime as _dt
+data['updated_at'] = _dt.datetime.now(_dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 with open(path, 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
