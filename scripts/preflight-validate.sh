@@ -112,7 +112,7 @@ trap 'rm -rf "$TMP"' EXIT
 status=0
 for t in $unique_targets; do
   log="$TMP/$(printf '%s' "$t" | tr '/' '-').log"
-  if ( cd "$CLONE" && make -k "$t/$MODE" V=s ) > "$log" 2>&1; then
+  if ( cd "$CLONE" && make -k -j"$(nproc)" "$t/$MODE" V=s ) > "$log" 2>&1; then
     echo "- PASS $t/$MODE" >> "$REPORT"
   else
     echo "- FAIL $t/$MODE" >> "$REPORT"
