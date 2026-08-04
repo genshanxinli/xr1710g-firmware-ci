@@ -43,20 +43,45 @@ jobs:
             || true
 
       - name: Commit and open summary PR
+        id: commit-pr
         if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'success'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B upstream-sync
-          git add overlay patches upstream.lock.json docs
-          git commit -m "sync: refresh upstream tracking set" || true
-          git push -f origin upstream-sync
-          if gh pr view upstream-sync --json number -q .number >/dev/null 2>&1; then
-            gh pr edit upstream-sync --body-file docs/upstream-changes.md
-          else
-            gh pr create \
-              --base main \
-              --head upstream-sync \
-              --title "Upstream tracking refresh" \
-              --body-file docs/upstream-changes.md
-          fi
+          set +e
+          (
+            set -euxo pipefail
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -B upstream-sync
+            git add overlay patches upstream.lock.json docs
+            git commit -m "sync: refresh upstream tracking set" || true
+            git push -f origin upstream-sync
+            if gh pr view upstream-sync --json number -q .number >/dev/null 2>&1; then
+              gh pr edit upstream-sync --body-file docs/upstream-changes.md
+            else
+              gh pr create \
+                --base main \
+                --head upstream-sync \
+                --title "Upstream tracking refresh" \
+                --body-file docs/upstream-changes.md
+            fi
+          ) > /tmp/sync-pr.log 2>&1
+          status=$?
+          cat /tmp/sync-pr.log
+          exit $status
+
+      - name: Print sync failure log
+        if: failure()
+        run: |
+          echo "::error::Sync Upstream PR step failed; see sync-upstream-failure artifact"
+          cat /tmp/sync-pr.log || true
+
+      - name: Upload sync failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-upstream-failure
+          path: |
+            /tmp/sync-pr.log
+            docs/upstream-changes.md
+          if-no-files-found: warn
+          retention-days: 7
