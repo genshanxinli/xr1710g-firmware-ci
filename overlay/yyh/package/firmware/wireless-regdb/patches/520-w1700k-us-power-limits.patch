@@ -7,15 +7,22 @@ published limits conservatively where they materially differ from upstream:
 - 2.4 GHz already uses 30 dBm, which is the nearest whole-dBm approximation
   to the reported 29.5 dBm conducted limit, so leave it unchanged.
 - Raise US UNII-1 from 23 dBm to 29 dBm to better match the W1700K AP grant.
+- Extend UNII-3 through 5895 MHz and drop the lower-power NO-IR sub-band,
+  matching the W1700K channel plan used by the fanboy base.
 - Raise US 6 GHz from 12 dBm to 29 dBm EIRP for Low Power Indoor operation.
 
 Do not encode the higher AFC / Standard Power 6 GHz figures here. The current
 stack has no AFC enforcement path, and the old parser cannot describe those
 conditional limits safely.
 ---
+diff --git a/db.txt b/db.txt
+index 2cfba68..895df9b 100644
 --- a/db.txt
 +++ b/db.txt
-@@ -2041,15 +2041,15 @@ country US: DFS-FCC
+@@ -2080,21 +2080,20 @@ country US: DFS-FCC
+ 	# S1G Channel 37-51
+ 	(920 - 928 @ 8), (30)
+ 	(2400 - 2472 @ 40), (30)
 -	# 5.15 ~ 5.25 GHz: 30 dBm for master mode, 23 dBm for clients
 -	(5150 - 5250 @ 80), (23), AUTO-BW
 +	# Local target: approximate the W1700K UNII-1 AP grant to 29 dBm
@@ -26,11 +33,15 @@ conditional limits safely.
  	# requirements, we can extend the range by 5 MHz to make the kernel
  	# happy and be able to use channel 144.
  	(5470 - 5730 @ 160), (24), DFS
- 	(5730 - 5850 @ 80), (30), AUTO-BW
+-	(5730 - 5850 @ 80), (30), AUTO-BW
++	(5730 - 5895 @ 160), (30), AUTO-BW
  	# https://www.federalregister.gov/documents/2021/05/03/2021-08802/use-of-the-5850-5925-ghz-band
  	# max. 33 dBm AP @ 20MHz, 36 dBm AP @ 40Mhz+, 6 dB less for clients
- 	(5850 - 5895 @ 40), (27), NO-OUTDOOR, AUTO-BW, NO-IR
+-	(5850 - 5895 @ 40), (27), NO-OUTDOOR, AUTO-BW, NO-IR
  	# 6g band
  	# https://www.federalregister.gov/documents/2020/05/26/2020-11236/unlicensed-use-of-the-6ghz-band
 -	(5925 - 7125 @ 320), (12), NO-OUTDOOR
 +	(5925 - 7125 @ 320), (29), NO-OUTDOOR
+ 	# 60g band
+ 	# reference: section IV-D https://docs.fcc.gov/public/attachments/FCC-16-89A1.pdf
+ 	# channels 1-6 EIRP=40dBm(43dBm peak)

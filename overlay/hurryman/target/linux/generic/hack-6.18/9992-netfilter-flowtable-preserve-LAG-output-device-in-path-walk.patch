@@ -2,11 +2,8 @@ From: Jihong Min <hurryman2212@gmail.com>
 Date: Tue, 26 May 2026 04:54:11 +0900
 Subject: [PATCH] netfilter: flowtable: preserve LAG output device in path walk
 
-Build immutable flow keys from the post-NAT flowtable tuple for each
-direction, so bonding can select the same slave without touching the
-current skb or reusing it for the opposite direction. Once bonding
-exposes that slave through fill_forward_path, the resulting path also
-contains a DEV_PATH_LAG entry.
+Once bonding exposes a selected slave through fill_forward_path, the
+resulting path also contains a DEV_PATH_LAG entry.
 
 Handle that entry as an Ethernet-like path step and preserve the LAG
 master as the software output device. Later path entries can then resolve
@@ -17,60 +14,10 @@ Assisted-by: Codex:gpt-5.6
 Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
 diff --git a/net/netfilter/nf_flow_table_path.c b/net/netfilter/nf_flow_table_path.c
-index 92dc3d2..d3d50f1 100644
+index 5d70788..10ef70c 100644
 --- a/net/netfilter/nf_flow_table_path.c
 +++ b/net/netfilter/nf_flow_table_path.c
-@@ -16,6 +16,7 @@
- #include <net/netfilter/nf_flow_table.h>
- #include <linux/if_bridge.h>
- #include <linux/if_ether.h>
-+#include <net/flow_dissector.h>
- #include <net/route.h>
- #include <net/ip6_route.h>
- 
-@@ -85,6 +86,41 @@ out:
- 	return __dev_fill_forward_path(ctx, ha, stack);
- }
- 
-+static void nft_flow_keys_init(const struct nf_conn *ct,
-+			       enum ip_conntrack_dir dir,
-+			       struct flow_keys *flow)
-+{
-+	const struct nf_conntrack_tuple *tuple = &ct->tuplehash[dir].tuple;
-+	const struct nf_conntrack_tuple *other = &ct->tuplehash[!dir].tuple;
-+
-+	memset(flow, 0, sizeof(*flow));
-+
-+	/* Match the packet tuple after flowtable NAT mangling. */
-+	switch (tuple->src.l3num) {
-+	case NFPROTO_IPV4:
-+		flow->control.addr_type = FLOW_DISSECTOR_KEY_IPV4_ADDRS;
-+		flow->basic.n_proto = htons(ETH_P_IP);
-+		flow->addrs.v4addrs.src = other->dst.u3.ip;
-+		flow->addrs.v4addrs.dst = other->src.u3.ip;
-+		break;
-+	case NFPROTO_IPV6:
-+		flow->control.addr_type = FLOW_DISSECTOR_KEY_IPV6_ADDRS;
-+		flow->basic.n_proto = htons(ETH_P_IPV6);
-+		flow->addrs.v6addrs.src = other->dst.u3.in6;
-+		flow->addrs.v6addrs.dst = other->src.u3.in6;
-+		break;
-+	}
-+
-+	flow->basic.ip_proto = tuple->dst.protonum;
-+	switch (tuple->dst.protonum) {
-+	case IPPROTO_TCP:
-+	case IPPROTO_UDP:
-+		flow->ports.src = other->dst.u.all;
-+		flow->ports.dst = other->src.u.all;
-+		break;
-+	}
-+}
-+
- struct nft_forward_info {
- 	const struct net_device *indev;
- 	const struct net_device *outdev;
-@@ -116,12 +152,17 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
+@@ -152,12 +152,17 @@ static void nft_dev_path_info(const struct net_device_path_stack *stack,
  		case DEV_PATH_ETHERNET:
  		case DEV_PATH_DSA:
  		case DEV_PATH_VLAN:
@@ -88,17 +35,3 @@ index 92dc3d2..d3d50f1 100644
  			if (path->type == DEV_PATH_DSA) {
  				i = stack->num_paths;
  				break;
-@@ -217,10 +258,13 @@ static int nft_dev_forward_path(const struct nft_pktinfo *pkt,
- 		.dev	= dst->dev,
- 	};
- 	struct nft_forward_info info = {};
-+	struct flow_keys flow;
- 	unsigned char ha[ETH_ALEN];
- 	int i;
- 
- 	memset(ha, 0, sizeof(ha));
-+	nft_flow_keys_init(ct, dir, &flow);
-+	ctx.flow = &flow;
- 
- 	if (is_bridging) {
- 		enum ip_conntrack_info pkt_ctinfo;

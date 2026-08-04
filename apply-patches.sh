@@ -65,6 +65,8 @@ apply_patch_dir() {
 }
 
 echo "Applying XR1710G overlays to $CLONE"
+# Fanboy regdb 555 conflicts with the YYH W1700K overrides; 520/530 carry the same fixes.
+rm -f "$CLONE/package/firmware/wireless-regdb/patches/555-w1700k-fix.patch"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
