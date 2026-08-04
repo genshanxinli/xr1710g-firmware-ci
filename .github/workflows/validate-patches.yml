@@ -1,8 +1,17 @@
 name: Validate Patches
 
 on:
-  push:
   pull_request:
+    paths:
+      - 'apply-patches.sh'
+      - 'candidates/**'
+      - 'defconfig'
+      - 'overlays/**'
+      - 'patches/**'
+      - 'scripts/**'
+      - 'upstream.lock.json'
+      - 'upstream.yml'
+      - '.github/workflows/validate-patches.yml'
   workflow_dispatch:
     inputs:
       mode:
@@ -118,11 +127,28 @@ jobs:
         run: |
           cd ${{ env.BUILD_DIR }}
           make download -j$(nproc)
+      - name: Save dl cache
+        continue-on-error: true
+        if: success() && steps.cache-dl.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+      - name: Save toolchain cache
+        continue-on-error: true
+        if: success() && steps.cache-tc.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Run preflight
         run: |
           bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
@@ -199,11 +225,28 @@ jobs:
         run: |
           cd ${{ env.BUILD_DIR }}
           make download -j$(nproc)
+      - name: Save dl cache
+        continue-on-error: true
+        if: success() && steps.cache-dl.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+      - name: Save toolchain cache
+        continue-on-error: true
+        if: success() && steps.cache-tc.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/staging_dir
+            ${{ env.BUILD_DIR }}/build_dir/host
+            ${{ env.BUILD_DIR }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Apply candidates
         run: |
           bash ${{ env.CI_REPO }}/scripts/apply-candidates.sh \
