@@ -48,7 +48,8 @@ jobs:
           mkdir -p ${{ env.BUILD_DIR }}/dl
 
       - name: Restore dl cache
-        uses: actions/cache@v4
+        id: cache-dl
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/dl
           key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
@@ -60,7 +61,8 @@ jobs:
           mkdir -p ${{ env.BUILD_DIR }}/feeds
 
       - name: Restore feeds cache
-        uses: actions/cache@v4
+        id: cache-feeds
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
           key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
@@ -69,7 +71,7 @@ jobs:
 
       - name: Restore toolchain cache
         id: cache-tc
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ env.BUILD_DIR }}/staging_dir
@@ -79,10 +81,15 @@ jobs:
           restore-keys: |
             toolchain-fanboy-
 
+      - name: Prepare ccache cache path
+        run: |
+          mkdir -p ${{ env.BUILD_DIR }}/.ccache
+
       - name: Restore ccache
-        uses: actions/cache@v4
+        id: cache-ccache
+        uses: actions/cache/restore@v4
         with:
-          path: ~/.ccache
+          path: ${{ env.BUILD_DIR }}/.ccache
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: |
             ccache-fanboy-
@@ -123,6 +130,24 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
+      - name: Check feeds cache
+        id: check-feeds
+        if: success() && steps.cache-feeds.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/feeds" ] && [ -n "$(find "${{ env.BUILD_DIR }}/feeds" -mindepth 1 -print -quit)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save feeds cache
+        if: success() && steps.cache-feeds.outputs.cache-hit != 'true' && steps.check-feeds.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/feeds
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+
       - name: Configure
         run: |
           cd ${{ env.BUILD_DIR }}
@@ -149,14 +174,45 @@ jobs:
             sleep 10
           done
 
+      - name: Check dl cache
+        id: check-dl
+        if: success() && steps.cache-dl.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/dl" ] && [ -n "$(find "${{ env.BUILD_DIR }}/dl" -mindepth 1 -print -quit)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save dl cache
+        if: success() && steps.cache-dl.outputs.cache-hit != 'true' && steps.check-dl.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
 
+      - name: Check toolchain cache
+        id: check-tc
+        if: success() && steps.cache-tc.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/staging_dir" ] \
+            && [ -d "${{ env.BUILD_DIR }}/build_dir/host" ] \
+            && ls -d "${{ env.BUILD_DIR }}"/build_dir/toolchain-* >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Save toolchain cache
-        if: steps.cache-tc.outputs.cache-hit != 'true' && success()
+        if: success() && steps.cache-tc.outputs.cache-hit != 'true' && steps.check-tc.outputs.exists == 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -165,12 +221,6 @@ jobs:
             ${{ env.BUILD_DIR }}/build_dir/toolchain-*
           key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
 
-      - name: Save ccache
-        if: success()
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
       - name: Quick kernel patch check
         run: |
           cd ${{ env.BUILD_DIR }}
@@ -181,6 +231,24 @@ jobs:
         run: |
           cd ${{ env.BUILD_DIR }}
           make -j$(nproc) V=s > build.log 2>&1
+
+      - name: Check ccache cache
+        id: check-ccache
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/.ccache" ] && [ -n "$(find "${{ env.BUILD_DIR }}/.ccache" -mindepth 1 -print -quit)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save ccache
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true' && steps.check-ccache.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
 
       - name: Surface build errors
         if: failure()
