@@ -10,6 +10,8 @@ fi
 
 echo "Refreshing upstream overlays..."
 bash "$SCRIPT_DIR/extract-overlay.sh"
+mkdir -p "$ROOT/candidates"
+[ -f "$ROOT/candidates/.gitkeep" ] || touch "$ROOT/candidates/.gitkeep"
 
 for name in fanboy hurryman yyh; do
   sha="$(upstream_sha "$name")"

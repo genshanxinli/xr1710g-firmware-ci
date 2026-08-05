@@ -39,9 +39,10 @@ jobs:
       - name: Create conflict issue
         if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'failure'
         run: |
+          cat docs/upstream-changes.md docs/preflight-report.md > /tmp/conflict-body.md 2>/dev/null || true
           gh issue create \
             --title "Upstream overlay refresh conflict" \
-            --body-file docs/upstream-changes.md \
+            --body-file /tmp/conflict-body.md \
             || true
 
       - name: Commit and open summary PR
@@ -54,17 +55,18 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git checkout -B upstream-sync
-            git add overlay patches upstream.lock.json docs
+            git add overlay patches candidates upstream.lock.json docs
             git commit -m "sync: refresh upstream tracking set" || true
             git push -f origin upstream-sync
+            cat docs/upstream-changes.md docs/preflight-report.md > /tmp/pr-body.md 2>/dev/null || true
             if gh pr view upstream-sync --json number -q .number >/dev/null 2>&1; then
-              gh pr edit upstream-sync --body-file docs/upstream-changes.md
+              gh pr edit upstream-sync --body-file /tmp/pr-body.md
             else
               gh pr create \
                 --base main \
                 --head upstream-sync \
                 --title "Upstream tracking refresh" \
-                --body-file docs/upstream-changes.md
+                --body-file /tmp/pr-body.md
             fi
           ) > /tmp/sync-pr.log 2>&1
           status=$?
@@ -85,6 +87,6 @@ jobs:
           path: |
             /tmp/sync-pr.log
             docs/upstream-changes.md
+            docs/preflight-report.md
           if-no-files-found: warn
           retention-days: 7
-
