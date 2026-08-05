@@ -6,7 +6,7 @@ on:
       - 'apply-patches.sh'
       - 'candidates/**'
       - 'defconfig'
-      - 'overlays/**'
+      - 'overlay/**'
       - 'patches/**'
       - 'scripts/**'
       - 'upstream.lock.json'
