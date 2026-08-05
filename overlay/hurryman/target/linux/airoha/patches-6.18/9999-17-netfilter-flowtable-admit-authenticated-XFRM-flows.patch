@@ -14,10 +14,18 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  1 file changed, 51 insertions(+), 5 deletions(-)
 
 diff --git a/net/netfilter/nft_flow_offload.c b/net/netfilter/nft_flow_offload.c
-index 32b4281038dd..03486cbccc80 100644
+index b8f76c9..e8c0e3e 100644
 --- a/net/netfilter/nft_flow_offload.c
 +++ b/net/netfilter/nft_flow_offload.c
-@@ -23,8 +23,29 @@ struct nft_flow_offload {
+@@ -15,6 +15,7 @@
+ #include <net/netfilter/nf_conntrack_core.h>
+ #include <net/netfilter/nf_conntrack_extend.h>
+ #include <net/netfilter/nf_flow_table.h>
++#include <net/xfrm.h>
+ 
+ struct nft_flow_offload {
+ 	struct nft_flowtable	*flowtable;
+@@ -22,8 +23,29 @@ struct nft_flow_offload {
  
  static bool nft_flow_offload_skip(struct sk_buff *skb, int family)
  {
@@ -49,7 +57,7 @@ index 32b4281038dd..03486cbccc80 100644
  
  	if (family == NFPROTO_IPV4) {
  		const struct ip_options *opt;
-@@ -57,6 +78,7 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
+@@ -56,6 +78,7 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
  	struct nf_flow_route route = {};
  	enum ip_conntrack_info ctinfo;
  	struct flow_offload *flow;
@@ -57,7 +65,7 @@ index 32b4281038dd..03486cbccc80 100644
  	enum ip_conntrack_dir dir;
  	struct nf_conn *ct;
  	int ret;
-@@ -72,9 +94,14 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
+@@ -71,9 +94,14 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
  	case IPPROTO_TCP:
  		tcph = skb_header_pointer(pkt->skb, nft_thoff(pkt),
  					  sizeof(_tcph), &_tcph);
@@ -74,7 +82,7 @@ index 32b4281038dd..03486cbccc80 100644
  		break;
  	case IPPROTO_UDP:
  		break;
-@@ -109,6 +136,17 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
+@@ -108,6 +136,17 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
  	if (nft_flow_route(pkt, ct, &route, dir, priv->flowtable) < 0)
  		goto err_flow_route;
  
@@ -92,7 +100,7 @@ index 32b4281038dd..03486cbccc80 100644
  	flow = flow_offload_alloc(ct);
  	if (!flow)
  		goto err_flow_alloc;
-@@ -117,7 +155,9 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
+@@ -116,7 +155,9 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
  	if (tcph)
  		flow_offload_ct_tcp(ct);
  
@@ -103,7 +111,7 @@ index 32b4281038dd..03486cbccc80 100644
  	ret = flow_offload_add(flowtable, flow);
  	if (ret < 0)
  		goto err_flow_add;
-@@ -129,6 +169,12 @@ static void nft_flow_offload_eval(const struct nft_expr *expr,
+@@ -128,6 +169,12 @@ err_flow_add:
  err_flow_alloc:
  	dst_release(route.tuple[dir].dst);
  	dst_release(route.tuple[!dir].dst);
@@ -116,5 +124,3 @@ index 32b4281038dd..03486cbccc80 100644
  err_flow_route:
  	clear_bit(IPS_OFFLOAD_BIT, &ct->status);
  out:
--- 
-2.53.0
