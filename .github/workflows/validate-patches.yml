@@ -61,10 +61,12 @@ jobs:
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check shell scripts
         run: |
           bash -n apply-patches.sh scripts/*.sh
-          git diff --check
+          git diff --check origin/main...HEAD
 
   baseline-prepare:
     runs-on: ubuntu-24.04
@@ -254,7 +256,7 @@ jobs:
       - name: Run candidate preflight
         run: |
           bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
-            ${{ env.BUILD_DIR }} --mode=prepare --skip-apply \
+            ${{ env.BUILD_DIR }} --mode=${{ inputs.mode || 'prepare' }} --skip-apply \
             --report=${{ env.CI_REPO }}/docs/candidate-preflight-report.md
       - name: Upload candidate report
         if: always()
