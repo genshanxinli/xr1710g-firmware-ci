@@ -76,6 +76,10 @@ echo "Applying XR1710G overlays to $CLONE"
 find "$CLONE" -name "*.rej" -delete
 remove_conflicting_patch "package/firmware/wireless-regdb/patches/555-w1700k-fix.patch" "YYH 520/530 carry the same fixes"
 remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-list.patch" "YYH 101 carries the same txpower fix"
+# Superseded by the updated hurryman overlay.
+remove_conflicting_patch "package/kernel/mt76/patches/0012-wifi-mt76-npu-always-call-check_skb-on-rx.patch" "hurryman 0012 overlay is newer"
+# Superseded by the updated YYH overlay.
+remove_conflicting_patch "package/kernel/mt76/patches/0003-wifi-mt76-mt7996-replace-direct-WTBL-access-with-MCU-for-station-statistics.patch" "YYH 0003 overlay is newer"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
