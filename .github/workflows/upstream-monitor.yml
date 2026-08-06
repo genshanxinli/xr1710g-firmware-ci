@@ -1,0 +1,51 @@
+name: Monitor Further-Upstream
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+
+      - name: Run upstream monitor
+        id: monitor
+        run: |
+          bash scripts/monitor-upstream.sh > /tmp/upstream-monitor-digest.txt
+          status=$?
+          cat /tmp/upstream-monitor-digest.txt
+          if [ "$status" -eq 1 ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          elif [ "$status" -ne 0 ]; then
+            echo "::error::monitor-upstream.sh failed with status $status"
+            exit 1
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit updated baseline
+        if: steps.monitor.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/upstream-monitor.state
+          git commit -m "monitor: update upstream baseline" || true
+          git push
+
+      - name: Open digest issue
+        if: steps.monitor.outputs.changed == 'true'
+        run: |
+          gh issue create \
+            --title "Upstream monitor: changes detected" \
+            --body-file /tmp/upstream-monitor-digest.txt \
+            || true
