@@ -1133,7 +1133,7 @@ index cca9f5d..e51d4c0 100644
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++) {
  		airoha_qdma_start_napi(&eth->qdma[i]);
  		airoha_qdma_set(&eth->qdma[i], REG_QDMA_GLOBAL_CFG,
-@@ -4088,17 +4759,54 @@ static int airoha_probe(struct platform_device *pdev)
+@@ -4788,17 +4788,54 @@ static int airoha_probe(struct platform_device *pdev)
  		err = airoha_alloc_gdm_port(eth, np);
  		if (err) {
  			of_node_put(np);
@@ -1191,7 +1191,7 @@ index cca9f5d..e51d4c0 100644
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++) {
  		airoha_qdma_stop_napi(&eth->qdma[i]);
  		airoha_qdma_tx_cleanup(&eth->qdma[i]);
-@@ -4119,14 +4827,13 @@ static int airoha_probe(struct platform_device *pdev)
+@@ -4819,14 +4856,13 @@ static int airoha_probe(struct platform_device *pdev)
  				continue;
  
  			netdev = netdev_from_priv(dev);
@@ -1207,7 +1207,7 @@ index cca9f5d..e51d4c0 100644
  	airoha_hw_cleanup(eth);
  error_netdev_free:
  	free_netdev(eth->napi_dev);
-@@ -4140,6 +4847,42 @@ static void airoha_remove(struct platform_device *pdev)
+@@ -4840,6 +4877,42 @@ static void airoha_remove(struct platform_device *pdev)
  	struct airoha_eth *eth = platform_get_drvdata(pdev);
  	int i;
  
@@ -1250,7 +1250,7 @@ index cca9f5d..e51d4c0 100644
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++) {
  		airoha_qdma_stop_napi(&eth->qdma[i]);
  		airoha_qdma_tx_cleanup(&eth->qdma[i]);
-@@ -4160,7 +4903,6 @@ static void airoha_remove(struct platform_device *pdev)
+@@ -4862,7 +4899,6 @@ static void airoha_remove(struct platform_device *pdev)
  				continue;
  
  			netdev = netdev_from_priv(dev);
