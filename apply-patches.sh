@@ -59,6 +59,9 @@ apply_patch_dir() {
     if ! patch -p1 --batch --forward -d "$CLONE" < "$p" > /tmp/patch-$$.log 2>&1; then
       if grep -qiE "Reversed|previously applied|already exists|Skipping patch|hunk ignored" /tmp/patch-$$.log; then
         echo "  skip already applied: $(basename "$p")"
+        # Re-applying onto an already-patched tree can leave stale .rej files;
+        # clean them so the final reject check does not false-positive.
+        find "$CLONE" -name "*.rej" -delete 2>/dev/null || true
         rm -f /tmp/patch-$$.log
         continue
       fi
@@ -77,6 +80,7 @@ find "$CLONE" -name "*.rej" -delete
 remove_conflicting_patch "package/firmware/wireless-regdb/patches/555-w1700k-fix.patch" "YYH 520/530 carry the same fixes"
 remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-list.patch" "YYH 101 carries the same txpower fix"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
+copy_overlay "$OVERLAY/upstream-backports" "upstream backports"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
 copy_patch_files "$PATCHES/yyh/kernel" "$CLONE/target/linux/airoha/patches-6.18"
