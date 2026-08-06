@@ -326,4 +326,3 @@ Untracked non-patch overlay files exist but are outside the patch inventory:
 - `D:\Agent\xr1710g_1\xr1710g-firmware-ci\overlay\yyh\target\linux\airoha\an7581\base-files\usr\sbin\xr1710g-net-debug`
 
 No untracked non-patch overlay file shares the same relative path with a tracked overlay file, so none was added to the patch duplicate tables above.
-
