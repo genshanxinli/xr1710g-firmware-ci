@@ -1113,7 +1113,7 @@ index cca9f5d..e51d4c0 100644
  
  	return airoha_setup_phylink(netdev);
  }
-@@ -4064,13 +4730,18 @@ static int airoha_probe(struct platform_device *pdev)
+@@ -4064,14 +4730,19 @@ static int airoha_probe(struct platform_device *pdev)
  	eth->napi_dev->threaded = true;
  	strscpy(eth->napi_dev->name, "qdma_eth", sizeof(eth->napi_dev->name));
  	platform_set_drvdata(pdev, eth);
@@ -1258,3 +1258,4 @@ index cca9f5d..e51d4c0 100644
  			phylink_destroy(dev->phylink);
  			of_node_put(netdev->dev.of_node);
  		}
+

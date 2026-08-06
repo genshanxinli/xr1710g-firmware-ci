@@ -82,7 +82,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	err = phylink_of_phy_connect(dev->phylink, netdev->dev.of_node, 0);
  	if (err) {
  		netdev_err(netdev, "could not attach PHY: %d\n", err);
-@@ -2205,14 +2202,15 @@ static int airoha_dev_open(struct net_device *netdev)
+@@ -2205,14 +2202,14 @@ static int airoha_dev_open(struct net_device *netdev)
  	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
  				    pse_port);
  
@@ -98,7 +98,6 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
 -
  	return 0;
  }
-+}
  
  static int airoha_dev_stop(struct net_device *netdev)
  {
@@ -183,3 +182,6 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.h b/drivers/net/ethernet/air
  
  #endif /* AIROHA_ETH_H */
 +
+
+
+
