@@ -3,22 +3,14 @@ From: Jihong Min <hurryman2212@gmail.com>
 Date: Wed, 3 Jun 2026 11:52:30 +0900
 Subject: [PATCH] net: airoha: enable LRO by default
 
+---
  ...-airoha-Implement-HW-GRO-TCP-support.patch |   6 +-
- 1 file changed, 3 insertions(+), 3 deletions(-)
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/target/linux/airoha/patches-6.18/916-02-net-airoha-Implement-HW-GRO-TCP-support.patch b/target/linux/airoha/patches-6.18/916-02-net-airoha-Implement-HW-GRO-TCP-support.patch
 index 4a2f165189a248..bc648cc7073747 100644
 --- a/target/linux/airoha/patches-6.18/916-02-net-airoha-Implement-HW-GRO-TCP-support.patch
 +++ b/target/linux/airoha/patches-6.18/916-02-net-airoha-Implement-HW-GRO-TCP-support.patch
-@@ -446,7 +446,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
- +	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
-  				    pse_port);
-  
--+ 	qdma->users++;
-++	qdma->users++;
- +	if (netdev->features & NETIF_F_GRO_HW)
- +		airoha_dev_lro_enable(dev);
- +
 @@ -535,8 +535,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  -			      NETIF_F_HW_TC;
  -	netdev->features |= netdev->hw_features;
@@ -30,3 +22,4 @@ index 4a2f165189a248..bc648cc7073747 100644
  +	netdev->vlan_features = AIROHA_HW_FEATURES;
   	SET_NETDEV_DEV(netdev, eth->dev);
   
+--

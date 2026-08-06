@@ -1,4 +1,3 @@
-From 5a0a2b6e14c1ea5a5c9e6d0f9d1f3e7f83f0f5f0 Mon Sep 17 00:00:00 2001
 From: Jihong Min <hurryman2212@gmail.com>
 Date: Mon, 27 Jul 2026 14:00:00 +0900
 Subject: [PATCH] net: airoha: share HW GRO state across QDMA users
@@ -15,14 +14,16 @@ feature on any one of them changes the QDMA-wide setting consistently.
 Also fix the sibling walk to use each GDM port rather than repeatedly
 walking the initiating device's port.
 
-Rebased by XR1710G CI for the fanboy offload base (6.18.41).
-
+Assisted-by: Codex:gpt-5.6
 Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
-diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c
+ drivers/net/ethernet/airoha/airoha_eth.c | 64 ++++++++++++------------
+ drivers/net/ethernet/airoha/airoha_eth.h |  2 +-
+ 2 files changed, 33 insertions(+), 33 deletions(-)
+
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2121,13 +2121,20 @@ static void airoha_dev_set_xmit_frame_size(struct net_device *netdev)
+@@ -2629,13 +2629,20 @@
  					 VLAN_ETH_HLEN + netdev->mtu));
  }
  
@@ -45,7 +46,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  		int j;
  
  		if (!port)
-@@ -2145,12 +2152,15 @@ static void airoha_update_netdev_features(struct airoha_gdm_dev *dev)
+@@ -2653,12 +2660,15 @@
  				continue;
  
  			netdev = netdev_from_priv(iter_dev);
@@ -62,7 +63,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  }
  
  static int airoha_dev_open(struct net_device *netdev)
-@@ -2162,19 +2172,6 @@ static int airoha_dev_open(struct net_device *netdev)
+@@ -2670,19 +2680,6 @@
  	struct airoha_qdma *qdma;
  	int qdma_id, err;
  
@@ -82,7 +83,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	err = phylink_of_phy_connect(dev->phylink, netdev->dev.of_node, 0);
  	if (err) {
  		netdev_err(netdev, "could not attach PHY: %d\n", err);
-@@ -2205,14 +2202,14 @@ static int airoha_dev_open(struct net_device *netdev)
+@@ -2713,12 +2710,12 @@
  	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
  				    pse_port);
  
@@ -99,9 +100,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	return 0;
  }
  
- static int airoha_dev_stop(struct net_device *netdev)
- {
-@@ -2231,9 +2229,6 @@ static int airoha_dev_stop(struct net_device *netdev)
+@@ -2739,9 +2736,6 @@
  					    REG_GDM_FWD_CFG(port->id),
  					    FE_PSE_PORT_DROP);
  
@@ -111,7 +110,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	phylink_stop(dev->phylink);
  	phylink_disconnect_phy(dev->phylink);
  
-@@ -2544,19 +2539,6 @@ int airoha_get_fe_port(struct airoha_gdm_dev *dev)
+@@ -3052,19 +3046,6 @@
  					   : port->id;
  }
  
@@ -131,16 +130,16 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  static int airoha_dev_set_features(struct net_device *netdev,
  				   netdev_features_t features)
  {
-@@ -2565,7 +2547,7 @@ static int airoha_dev_set_features(struct net_device *netdev,
- 	struct airoha_qdma *qdma = airoha_qdma_deref(dev);
- 	int qdma_id = qdma - &dev->eth->qdma[0];
+@@ -3078,7 +3059,7 @@
+ 	if (err)
+ 		return err;
  
 -	if (!(diff & NETIF_F_GRO_HW))
 +	if (!(diff & NETIF_F_GRO_HW) || qdma->syncing_gro_features)
  		return 0;
  
  	if (features & NETIF_F_GRO_HW)
-@@ -2573,6 +2555,11 @@ static int airoha_dev_set_features(struct net_device *netdev,
+@@ -3086,6 +3067,11 @@
  	else
  		airoha_fe_lro_disable(dev->eth, qdma_id);
  
@@ -152,7 +151,7 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	return 0;
  }
  
-@@ -3644,7 +3631,6 @@ static const struct net_device_ops airoha_netdev_ops = {
+@@ -4284,7 +4270,6 @@
  	.ndo_stop		= airoha_dev_stop,
  	.ndo_change_mtu		= airoha_dev_change_mtu,
  	.ndo_select_queue	= airoha_dev_select_queue,
@@ -160,15 +159,9 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/air
  	.ndo_set_features	= airoha_dev_set_features,
  	.ndo_start_xmit		= airoha_dev_xmit,
  	.ndo_get_stats64        = airoha_dev_get_stats64,
-@@ -4426,3 +4412,4 @@ module_platform_driver(airoha_driver);
- MODULE_LICENSE("GPL");
- MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
- MODULE_DESCRIPTION("Ethernet driver for Airoha SoC");
-+
-diff --git a/drivers/net/ethernet/airoha/airoha_eth.h b/drivers/net/ethernet/airoha/airoha_eth.h
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -579,7 +579,7 @@ struct airoha_qdma {
+@@ -562,7 +562,7 @@
  	struct airoha_eth *eth;
  	void __iomem *regs;
  
@@ -177,11 +170,3 @@ diff --git a/drivers/net/ethernet/airoha/airoha_eth.h b/drivers/net/ethernet/air
  
  	struct airoha_irq_bank irq_banks[AIROHA_MAX_NUM_IRQ_BANKS];
  
-@@ -817,3 +817,4 @@ static inline int airoha_ppe_debugfs_init(struct airoha_ppe *ppe)
- #endif
- 
- #endif /* AIROHA_ETH_H */
-+
-
-
-
