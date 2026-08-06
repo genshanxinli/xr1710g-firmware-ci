@@ -11,9 +11,13 @@ CONFIG_PACKAGE_luci-app-w1700k-fancontrol=y
 CONFIG_PACKAGE_luci-app-netspeedtest=y
 CONFIG_PACKAGE_luci-app-wifi7=y
 CONFIG_PACKAGE_luci-theme-glass=y
+CONFIG_PACKAGE_luci-i18n-airoha-npu-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-glass-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-mlo-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-w1700k-fancontrol-zh-cn=y
 
 # Flow offload / hardware acceleration
 CONFIG_NF_FLOW_TABLE=y
@@ -24,16 +28,23 @@ CONFIG_PACKAGE_kmod-nft-fullcone=y
 CONFIG_PACKAGE_kmod-nf-flowoffload=y
 CONFIG_PACKAGE_kmod-nf-flowoffload4=y
 CONFIG_PACKAGE_kmod-nf-flowoffload6=y
-CONFIG_PACKAGE_wpad-mbedtls=y
+CONFIG_PACKAGE_wpad-basic-mbedtls=y
 
 # Utilities
 CONFIG_PACKAGE_ethtool-full=y
 CONFIG_PACKAGE_fastfetch=y
+CONFIG_PACKAGE_ip-bridge=y
+CONFIG_PACKAGE_ip-full=y
+CONFIG_PACKAGE_iperf3=y
 CONFIG_PACKAGE_irqbalance=y
+CONFIG_PACKAGE_kmod-airoha-net-debug=y
 CONFIG_PACKAGE_luci-app-irqbalance=y
 CONFIG_PACKAGE_luci-app-sqm=y
 CONFIG_PACKAGE_sqm-scripts=y
 CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_mdio-tools=y
+CONFIG_PACKAGE_phytool=y
+CONFIG_PACKAGE_tcpdump=y
 
 CONFIG_DEVEL=y
 CONFIG_CCACHE=y

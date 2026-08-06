@@ -1,0 +1,24 @@
+diff --git a/target/linux/airoha/modules.mk b/target/linux/airoha/modules.mk
+index e1adc94bfb3a6e2b9d702119bbb742cf077d4b68..ded7b8069f6de859a66ae2b3c101267ef868ee5b 100644
+--- a/target/linux/airoha/modules.mk
++++ b/target/linux/airoha/modules.mk
+@@ -39,3 +39,19 @@
+ $(eval $(call KernelPackage,pwm-airoha))
+ 
+ 
++define KernelPackage/airoha-net-debug
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=Airoha Ethernet dynamic debug support
++  DEPENDS:=@(TARGET_airoha_an7581)
++  KCONFIG:= \
++	CONFIG_DYNAMIC_DEBUG=y \
++	CONFIG_DYNAMIC_DEBUG_CORE=y
++endef
++
++define KernelPackage/airoha-net-debug/description
++ Enables runtime dynamic debug controls for Airoha Ethernet, PCS, phylink,
++ and PHY drivers. Debug messages remain disabled until explicitly enabled.
++endef
++
++$(eval $(call KernelPackage,airoha-net-debug))
++

@@ -1,8 +1,8 @@
 diff --git a/target/linux/airoha/image/an7581.mk b/target/linux/airoha/image/an7581.mk
-index 2095d8a..c0ed58c 100644
+index 2095d8a9dbcf51de49f6f57e42f7f96ffaa8dfb0..c8395b5c9c3a9b9cd1536aec538b7192099f6f75 100644
 --- a/target/linux/airoha/image/an7581.mk
 +++ b/target/linux/airoha/image/an7581.mk
-@@ -101,9 +101,10 @@ define Device/gemtek_w1700k-ubi
+@@ -101,9 +101,10 @@
    DEVICE_COMPAT_MESSAGE := Partition table has been changed to cooperate \
         with the vendor bootloader with regard to the BMT/BBT partition at \
         the end of flash. A reinstall including corrected chainloader is needed.
@@ -11,12 +11,12 @@ index 2095d8a..c0ed58c 100644
 -		    rtl826x-firmware kmod-phy-rtl8261ce
 +  DEVICE_PACKAGES := airoha-en7581-mt7996-npu-firmware ethtool-full fitblk kmod-i2c-an7581 \
 +		    kmod-hwmon-nct7802 kmod-mt7996-firmware kmod-phy-realtek \
-+		    wpad-mbedtls \
++		    wpad-basic-mbedtls \
 +		    rtl826x-firmware
    UBINIZE_OPTS := -E 5
    BLOCKSIZE := 128k
    PAGESIZE := 2048
-@@ -121,6 +122,46 @@ define Device/gemtek_w1700k-ubi
+@@ -121,6 +122,54 @@
  endef
  TARGET_DEVICES += gemtek_w1700k-ubi
  
@@ -35,16 +35,24 @@ index 2095d8a..c0ed58c 100644
 +		    -kmod-pwm-airoha \
 +		    airoha-en7581-mt7996-npu-firmware \
 +		    apk-mbedtls ethtool-full fitblk \
++		    ip-bridge ip-full iperf3 mdio-tools phytool tcpdump \
 +		    kmod-i2c-an7581 kmod-hwmon-nct7802 \
-+		    kmod-mt7996-firmware kmod-phy-realtek rtl826x-firmware \
++		    kmod-mt7996-firmware kmod-phy-realtek \
++		    kmod-airoha-net-debug rtl826x-firmware \
 +		    luci \
 +		    luci-app-firewall luci-app-mlo \
 +		    luci-app-package-manager \
++		    luci-i18n-airoha-npu-zh-cn \
++		    luci-i18n-base-zh-cn \
++		    luci-i18n-firewall-zh-cn \
++		    luci-i18n-glass-zh-cn \
 +		    luci-i18n-mlo-zh-cn \
++		    luci-i18n-package-manager-zh-cn \
++		    luci-i18n-w1700k-fancontrol-zh-cn \
 +		    luci-mod-admin-full \
-+		    luci-proto-ppp luci-theme-bootstrap \
++		    luci-proto-ppp luci-theme-bootstrap luci-theme-glass \
 +		    rpcd-mod-rrdns uhttpd uhttpd-mod-ubus \
-+		    wpad-mbedtls
++		    wpad-basic-mbedtls
 +  UBINIZE_OPTS := -E 5
 +  BLOCKSIZE := 128k
 +  PAGESIZE := 2048
