@@ -87,7 +87,7 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
  	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
  				    pse_port);
  
--	qdma->users++;
+- 	qdma->users++;
 -	if (netdev->features & NETIF_F_GRO_HW)
 +	qdma = airoha_qdma_deref(dev);
 +	qdma_id = qdma - &eth->qdma[0];
