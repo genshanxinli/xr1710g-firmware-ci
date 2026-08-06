@@ -12,7 +12,7 @@ bandwidth and receive NSS.  Set the force flag only when the current mode is
 more restrictive than the negotiated capabilities.  Later NSS or bandwidth
 changes already cause mt7996_mcu_add_rate_ctrl() to rebuild this TLV.
 
-Assisted-by: Codex:gpt-5.6-sol
+Assisted-by: Codex:gpt-5.6.sol
 Signed-off-by: Yanghan Ye <yyh94306@gmail.com>
 ---
  mt7996/mcu.c | 14 +++++++++++---

@@ -17,10 +17,11 @@ allowed_hurryman() {
     package/kernel/mt76/*|\
     package/network/config/firewall4/*|\
     package/network/services/hostapd/*|\
+    target/linux/airoha/patches-6.18/9990-*|\
     target/linux/airoha/patches-6.18/9999-*|\
+    target/linux/generic/hack-6.18/9990-*|\
     target/linux/generic/hack-6.18/9991-*|\
-    target/linux/generic/hack-6.18/9992-*|\
-    tools/elfutils/patches/014-*) return 0 ;;
+    target/linux/generic/hack-6.18/9992-*) return 0 ;;
   esac
   return 1
 }

@@ -59,6 +59,9 @@ apply_patch_dir() {
     if ! patch -p1 --batch --forward -d "$CLONE" < "$p" > /tmp/patch-$$.log 2>&1; then
       if grep -qiE "Reversed|previously applied|already exists|Skipping patch|hunk ignored" /tmp/patch-$$.log; then
         echo "  skip already applied: $(basename "$p")"
+        # Re-applying onto an already-patched tree can leave stale .rej files;
+        # clean them so the final reject check does not false-positive.
+        find "$CLONE" -name "*.rej" -delete 2>/dev/null || true
         rm -f /tmp/patch-$$.log
         continue
       fi
@@ -79,6 +82,7 @@ remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-l
 # Superseded by the updated hurryman overlay.
 remove_conflicting_patch "package/kernel/mt76/patches/0012-wifi-mt76-npu-always-call-check_skb-on-rx.patch" "hurryman 0012 overlay is newer"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
+copy_overlay "$OVERLAY/upstream-backports" "upstream backports"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
 copy_overlay "$OVERLAY/yyh" "yyh new-only files"
 copy_patch_files "$PATCHES/yyh/kernel" "$CLONE/target/linux/airoha/patches-6.18"

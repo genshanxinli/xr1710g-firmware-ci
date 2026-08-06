@@ -11,7 +11,7 @@ Export the capability bandwidth and NSS helpers used by MediaTek's
 operating-mode handling so mt7996 can construct STA_REC_RA without
 confusing capability limits with the current operating mode.
 
-Assisted-by: Codex:gpt-5.6-sol
+Assisted-by: Codex:gpt-5.6.sol
 Signed-off-by: Yanghan Ye <yyh94306@gmail.com>
 ---
  include/net/mac80211.h | 15 +++++++++++++++

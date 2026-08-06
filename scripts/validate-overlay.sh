@@ -14,6 +14,6 @@ cd "$TMP/openwrt"
 make download -j$(nproc)
 make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
 
-echo "Running patch preflight..."
-bash "$ROOT/scripts/preflight-validate.sh" "$TMP/openwrt" --mode=prepare
+echo "Running patch preflight (patches already applied by setup-validate-tree)..."
+bash "$ROOT/scripts/preflight-validate.sh" "$TMP/openwrt" --mode=prepare --skip-apply
 echo "Overlay validation passed."
