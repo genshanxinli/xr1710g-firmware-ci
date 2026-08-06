@@ -1,0 +1,55 @@
+diff --git a/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh b/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
+index 78ae382837..a42aeaf1f3 100755
+--- a/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
++++ b/package/network/config/wifi-scripts/files-ucode/lib/netifd/wireless/mac80211.sh
+@@ -250,7 +250,7 @@ function schedule_radio_txpower_retry(phy, config, ifnames) {
+ 		let pending = ifnames;
+ 
+ 		for (let i = 0; i < txpower_retry_count; i++) {
+-			system([ '/bin/sleep', txpower_retry_delay ]);
++			system([ '/bin/sleep', `${txpower_retry_delay}` ]);
+ 
+ 			if (fs.readfile(token_file) != token)
+ 				return;
+diff --git a/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-device.json b/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-device.json
+index f6dac167aa..ba175cbf54 100644
+--- a/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-device.json
++++ b/package/network/config/wifi-scripts/files-ucode/usr/share/schema/wireless.wifi-device.json
+@@ -354,6 +354,21 @@
+ 			"type": "boolean",
+ 			"default": true
+ 		},
++		"eht_mu_beamformer": {
++			"description": "Whether EHT MU beamformer support is advertised.",
++			"type": "boolean",
++			"default": true
++		},
++		"eht_su_beamformee": {
++			"description": "Whether EHT SU beamformee support is advertised.",
++			"type": "boolean",
++			"default": true
++		},
++		"eht_su_beamformer": {
++			"description": "Whether EHT SU beamformer support is advertised.",
++			"type": "boolean",
++			"default": true
++		},
+ 		"hostapd_options": {
+ 			"type": "array",
+ 			"items": {
+diff --git a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/hostapd.uc b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/hostapd.uc
+index 457f540ef7..98f44e0168 100644
+--- a/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/hostapd.uc
++++ b/package/network/config/wifi-scripts/files-ucode/usr/share/ucode/wifi/hostapd.uc
+@@ -447,6 +447,11 @@ function device_htmode_append(config) {
+ 
+ 		config.ieee80211be = true;
+ 
++		/* Hostapd masks these against the hardware EHT capabilities. */
++		set_default(config, 'eht_su_beamformer', true);
++		set_default(config, 'eht_su_beamformee', true);
++		set_default(config, 'eht_mu_beamformer', true);
++
+ 		if (!(eht_phy_cap[0] & 0x20))
+ 			config.eht_su_beamformer = false;
+ 		if (!(eht_phy_cap[0] & 0x40))
