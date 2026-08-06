@@ -59,6 +59,9 @@ apply_patch_dir() {
     if ! patch -p1 --batch --forward -d "$CLONE" < "$p" > /tmp/patch-$$.log 2>&1; then
       if grep -qiE "Reversed|previously applied|already exists|Skipping patch|hunk ignored" /tmp/patch-$$.log; then
         echo "  skip already applied: $(basename "$p")"
+        # Re-applying onto an already-patched tree can leave stale .rej files;
+        # clean them so the final reject check does not false-positive.
+        find "$CLONE" -name "*.rej" -delete 2>/dev/null || true
         rm -f /tmp/patch-$$.log
         continue
       fi
