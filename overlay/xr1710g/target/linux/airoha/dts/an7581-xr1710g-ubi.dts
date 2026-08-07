@@ -7,6 +7,11 @@
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/phy/phy.h>
 #include "an7581.dtsi"
+/* NPU Wi-Fi reserved-memory regions follow the MT7996 board overlay:
+ * pre-#24593 they live in an7581.dtsi, post-#24593 they move into
+ * an7581-npu-wlan.dtsi included here -- either way this board keeps
+ * all four Wi-Fi regions (pkt/tx-pkt/tx-bufid/ba) plus npu_binary. */
+#include "an7581-npu-mt7996.dtsi"
 
 / {
 	model = "XR1710G";
