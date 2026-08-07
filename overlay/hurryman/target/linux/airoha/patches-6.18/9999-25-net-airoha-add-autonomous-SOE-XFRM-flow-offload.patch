@@ -1819,14 +1819,6 @@ index 2b9eff7..29b64d6 100644
  
  	return err;
  }
-@@ -2646,6 +3840,7 @@ void airoha_ppe_deinit(struct airoha_eth *eth)
- 	npu = rcu_replace_pointer(eth->npu, NULL,
- 				  lockdep_is_held(&flow_offload_mutex));
- 	if (npu) {
-+		synchronize_rcu();
- 		npu->ops.ppe_deinit(npu);
- 		airoha_npu_put(npu);
- 	}
 @@ -2655,4 +3850,6 @@ void airoha_ppe_deinit(struct airoha_eth *eth)
  	rhashtable_destroy(&eth->ppe->l2_flows);
  	rhashtable_destroy(&eth->flow_table);
