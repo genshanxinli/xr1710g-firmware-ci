@@ -2,7 +2,7 @@ From: genshanxinli <genshanxinli@users.noreply.github.com>
 Subject: [PATCH] wifi: mt76: mt7996: fail-safe NPU offload and validate firmware replies
 
 The b2704cf5a4 NPU offload data path can corrupt host memory when the
-NPU firmware is not fully operational. Three defects:
+NPU firmware is not fully operational. Four defects:
 
 1. mt7996_mac_reset_work() ignores the return value of
    __mt7996_npu_hw_init(). During L1 SER recovery the PCIe link is
@@ -26,8 +26,40 @@ NPU firmware is not fully operational. Three defects:
    upper bound. Clamp the length to the buffer size, mirroring the
    check in airoha_eth.c airoha_qdma_rx_process().
 
+4. mt7996_probe() fails the whole probe when NPU offload init
+   fails. Degrade gracefully: tear the NPU down and continue with
+   the CPU data path so WiFi keeps working without offload.
+
 Signed-off-by: genshanxinli <genshanxinli@users.noreply.github.com>
 ---
+diff --git a/mt7996/init.c b/mt7996/init.c
+index 5aada56..2560e3b 100644
+--- a/mt7996/init.c
++++ b/mt7996/init.c
+@@ -1791,8 +1791,21 @@ int mt7996_register_device(struct mt7996_dev *dev)
+ 		return ret;
+ 
+ 	ret = mt7996_npu_hw_init(dev);
+-	if (ret)
+-		return ret;
++	if (ret) {
++		/* The NPU firmware is not operational (version 0.0 / mbox
++		 * timeouts, validated ring-base replies rejected). Disable
++		 * NPU offload and continue with the CPU data path instead
++		 * of failing the whole probe.
++		 */
++		struct airoha_npu *npu;
++
++		dev_warn(dev->mt76.dev,
++			 "NPU offload init failed (%d), continuing without NPU\n",
++			 ret);
++		npu = rcu_replace_pointer(dev->mt76.mmio.npu, NULL, true);
++		if (npu)
++			airoha_npu_put(npu);
++	}
+ 
+ 	mt7996_dma_rro_start(dev);
+ 
 diff --git a/mt7996/mac.c b/mt7996/mac.c
 index 570f85d..5015d37 100644
 --- a/mt7996/mac.c
