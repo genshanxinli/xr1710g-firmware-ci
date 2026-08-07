@@ -82,6 +82,18 @@ remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-l
 # Upstream-merged in kernel 6.18.42 (see overlay/upstream-backports pin bump).
 remove_conflicting_patch "target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch" "merged upstream in 6.18.42"
 remove_conflicting_patch "target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch" "merged upstream in 6.18.42"
+# Dropped experimental PPE-flow series (fanboy production stance):
+# offload.08.06/ubi2-oc-auto abandoned 999-90..93 / 990-04/05 / 930 and
+# replaced the symptom fix with mt76 0015 (avoid stale NPU wcid reuse).
+remove_conflicting_patch "target/linux/airoha/patches-6.18/930-net-airoha-ppe-flush-stale-PPE-flows-on-FDB-and-STA-events.patch" "experimental series dropped (see upstream-backports 0003)"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/990-04-netfilter-nf_flow_table-add-teardown-by-eth-vendor-notifier.patch" "experimental series dropped"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/990-05-airoha-gen-gate-ppe-flush-and-teardown-by-eth.patch" "experimental series dropped"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/999-90-diag-wifi-ppe-path.patch" "experimental series dropped"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/999-91-hash-fallback-replace-diag.patch" "experimental series dropped"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/999-92-reuse-stale-flow-cookie.patch" "experimental series dropped"
+remove_conflicting_patch "target/linux/airoha/patches-6.18/999-93-remove-gen-gate.patch" "experimental series dropped"
+remove_conflicting_patch "package/kernel/mt76/patches/0013-wifi-mt76-mt7996-flush-airoha-PPE-flows-on-STA-link-remove.patch" "experimental series dropped"
+remove_conflicting_patch "package/kernel/mt76/patches/0014-wifi-mt76-flush-airoha-PPE-on-generic-sta-removal.patch" "experimental series dropped"
 copy_overlay "$OVERLAY/hurryman" "hurryman new-only files"
 copy_overlay "$OVERLAY/upstream-backports" "upstream backports"
 apply_patch_dir "$PATCHES/hurryman" "hurryman adaptation patches"
