@@ -20,8 +20,9 @@
 ## 根因与对策（对应提交）
 
 1. **缓存压线淘汰**：9.1GB/10GB → `scripts/prune-caches.sh` 按前缀保留策略
-   （ccache 2 条、toolchain 2 条、dl/feeds 各 1 条），在 build.yml /
-   validate-patches.yml 每次运行末尾执行。
+   （ccache/toolchain 各 3 条、dl/feeds 各 2 条），在 build.yml /
+   validate-patches.yml 每次运行末尾执行。48h 内被访问过的条目受保护不删
+   （防跨分支误删，见下）。
 2. **ccache 从不重存/越用越旧**：key 改为
    `ccache-fanboy-<base-SHA>-<ci-content-hash>`（`scripts/ci-content-hash.sh`），
    内容变化即新 key 并重存，前缀回退复用旧内容族。
@@ -32,6 +33,17 @@
 5. **ccache 6G 爆盘风险**（standard runner 磁盘 ~14G）：降为 4G，ci-metrics 采集 df。
 6. **度量体系**：`scripts/ci-metrics.sh` 构建前后采集 ccache 统计/磁盘/目录大小，
    输出 `ci-metrics` artifact。
+
+## 已知机制（GitHub Actions 缓存分支作用域）
+
+**缓存按创建它的 ref 隔离**：run 只能 restore「自己分支创建的 + 默认分支（main）创建的」缓存；
+分支之间不互通。实测验证：PR run（ref=`refs/pull/18/merge`）保存的 dl/toolchain
+条目，分支上的 workflow_dispatch run 读不到（触发两次独立 toolchain 重建）。
+推论与实践：
+- **全量构建请在 main 上 dispatch**（或至少固定在一个稳定分支）——main scope 创建的缓存
+  全分支共享，是缓存效率的关键。
+- PR 校验 run 的保存只服务同一 PR 的后续 push，属合理开销。
+- prune 的 48h 访问保护即为此设计：跨分支误删活跃条目会打爆别的分支的暖态。
 
 ## 实测记录（优化后，按时间倒序）
 
