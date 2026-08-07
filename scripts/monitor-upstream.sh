@@ -20,7 +20,16 @@ STATE="$ROOT/docs/upstream-monitor.state"
 MT76_REPO="https://github.com/openwrt/mt76.git"
 OW_REPO="openwrt/openwrt"
 
-get_mt76_head() { git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}'; }
+get_mt76_head() {
+  # Retry once: CI runners occasionally hit transient network failures.
+  local head
+  head="$(git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}')"
+  if [ -z "$head" ]; then
+    sleep 3
+    head="$(git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}')"
+  fi
+  echo "$head"
+}
 get_kernel_618() {
   curl -fsSL https://cdn.kernel.org/pub/linux/kernel/v6.x/ 2>/dev/null \
     | grep -oE 'linux-6\.18\.[0-9]+\.tar\.xz' | sort -V | tail -1 \
