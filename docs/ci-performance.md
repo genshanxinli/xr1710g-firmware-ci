@@ -19,15 +19,15 @@
 
 ## 根因与对策（对应提交）
 
-1. **缓存压线淘汰**：9.1GB/10GB → `scripts/prune-caches.sh` 按前缀保留策略
-   （ccache/toolchain 各 3 条、dl/feeds 各 2 条），在 build.yml /
-   validate-patches.yml 每次运行末尾执行。48h 内被访问过的条目受保护不删
-   （防跨分支误删，见下）。
+1. **缓存压线淘汰**：9.1GB/10GB → `scripts/prune-caches.sh` 只处理「当前 ref + 默认分支」作用域的条目
+   （ccache/toolchain 各 3 条、dl/feeds 各 2 条），其他分支条目留给 GitHub 7 天不活跃 GC；
+   48h 内访问过的条目受保护不删。在 build.yml / validate-patches.yml 每次运行末尾执行。
 2. **ccache 从不重存/越用越旧**：key 改为
    `ccache-fanboy-<base-SHA>-<ci-content-hash>`（`scripts/ci-content-hash.sh`），
    内容变化即新 key 并重存，前缀回退复用旧内容族。
-3. **feeds 无条件网络更新**：feeds 缓存精确命中时跳过 `feeds update -a`
-   （`feeds install -a` 恒执行，软链不在缓存内）。
+3. **feeds 无条件网络更新**：feeds key 带日期后缀（`feeds-fanboy-<base>-<YYYYMMDD>`），
+   同日精确命中跳过 `feeds update -a`，次日必刷新重存（快照新鲜度 ≤24h）；
+   `feeds install -a` 恒执行（软链不在缓存内）。
 4. **sync-upstream 无缓存重建 toolchain**：sync-upstream.yml 恢复 dl/toolchain
    缓存到固定树路径，`validate-overlay.sh --toolchain-cached` 精确命中时跳过构建。
 5. **ccache 6G 爆盘风险**（standard runner 磁盘 ~14G）：降为 4G，ci-metrics 采集 df。
@@ -43,7 +43,12 @@
 - **全量构建请在 main 上 dispatch**（或至少固定在一个稳定分支）——main scope 创建的缓存
   全分支共享，是缓存效率的关键。
 - PR 校验 run 的保存只服务同一 PR 的后续 push，属合理开销。
-- prune 的 48h 访问保护即为此设计：跨分支误删活跃条目会打爆别的分支的暖态。
+- prune 只处理当前 ref + main 作用域条目（API 的 `ref` 字段过滤），不跨分支误删。
+
+**缓存版本 = 解析后绝对路径的哈希**：actions/cache 的 entry version 由路径列表决定，
+restore 时 key 与 version 必须同时匹配。因此 sync-upstream 的树必须在
+`$GITHUB_WORKSPACE/openwrt`（与 build.yml 的 BUILD_DIR 相对路径一致），
+放 `$RUNNER_TEMP` 下会永远 miss（实测修复前 sync 缓存恢复全部 0 秒未命中）。
 
 ## 实测记录（优化后，按时间倒序）
 

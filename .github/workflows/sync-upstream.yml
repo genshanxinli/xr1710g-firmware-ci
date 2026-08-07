@@ -15,7 +15,10 @@ permissions:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    # Pinned to the same image build.yml uses: on a cache hit the restored
+    # host toolchain was built on ubuntu-24.04, and ubuntu-latest would
+    # silently drift to newer images.
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -23,10 +26,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set sync tree path
-        # RUNNER_TEMP is a runner-provided shell env var; ${{ runner.temp }}
-        # is NOT accepted inside job-level env by the workflow parser.
+        # Tree lives under the workspace with the SAME relative paths as
+        # build.yml (openwrt/staging_dir, ...). actions/cache versions
+        # entries by the resolved absolute path list, so a $RUNNER_TEMP
+        # tree would never match build.yml's cache entries.
         run: |
-          echo "SYNC_TREE=$RUNNER_TEMP/openwrt-sync" >> "$GITHUB_ENV"
+          echo "SYNC_TREE=$GITHUB_WORKSPACE/openwrt" >> "$GITHUB_ENV"
 
       - name: Check upstream SHAs
         id: check

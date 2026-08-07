@@ -4,20 +4,22 @@
 # deleted the active base's ccache (observed 49% hit rate and 18 min
 # toolchain rebuilds as a result).
 #
-# Policy per key prefix:
-#   ccache-      keep the newest $KEEP_CCACHE entries (default 3)
-#   toolchain-   keep the newest $KEEP_TOOLCHAIN entries (default 3:
-#                rebuilding a toolchain costs ~18 min, so tolerate extra
-#                generations to cover base-SHA transitions)
-#   dl-          keep the newest $KEEP_DL entries (default 2)
-#   feeds-       keep the newest $KEEP_FEEDS entries (default 2)
-#
-# Two guards against cross-branch damage (GitHub scopes caches to the
-# creating branch + the default branch, so a run on one branch cannot
-# see entries created on another):
+# Policy:
+#   - only entries scoped to the CURRENT run's ref or the default branch
+#     (refs/heads/main) are touched; other refs' entries are left to
+#     GitHub's own 7-day inactivity GC, so a run on one branch can never
+#     delete a cache another branch is using;
+#   - within that set, per key prefix keep the newest N:
+#       ccache-      $KEEP_CCACHE (default 3)
+#       toolchain-   $KEEP_TOOLCHAIN (default 3: rebuilding a toolchain
+#                    costs ~18 min, so tolerate extra generations to
+#                    cover base-SHA transitions)
+#       dl-          $KEEP_DL (default 2)
+#       feeds-       $KEEP_FEEDS (default 2)
 #   - entries accessed within $PROTECT_HOURS (default 48) are never
-#     deleted, even if they exceed the keep counts (another branch is
-#     actively using them).
+#     deleted even if they exceed the keep counts;
+#   - entries with no recorded access are treated as active (protected)
+#     rather than deleted.
 #
 # Requires gh CLI (preinstalled on runners) and a GITHUB_TOKEN with
 # actions:write. Set DRY_RUN=1 to print deletions without performing them.
@@ -32,27 +34,32 @@ KEEP_DL="${KEEP_DL:-2}"
 KEEP_FEEDS="${KEEP_FEEDS:-2}"
 PROTECT_HOURS="${PROTECT_HOURS:-48}"
 
+CURRENT_REF="${GITHUB_REF:?prune-caches.sh requires GITHUB_REF (github.ref)}"
+DEFAULT_REF="refs/heads/${DEFAULT_BRANCH:-main}"
+
 entries() {
   gh api --paginate "repos/$REPO/actions/caches?per_page=100" \
-    --jq '.actions_caches[] | [.id, .key, .created_at, .last_accessed_at] | @tsv'
+    --jq '.actions_caches[] | [.id, .key, .created_at, .last_accessed_at, .ref] | @tsv'
 }
 
 NOW="$(date -u +%s)"
 
-# keep <prefix> <count> <entries-tsv>: print ids to KEEP, delete the rest,
-# skipping entries accessed within PROTECT_HOURS.
+# keep <prefix> <count>: print ids to keep, delete the rest among entries
+# scoped to the current ref or the default branch.
 prune_prefix() {
   local prefix="$1" keep="$2"
-  local all keep_ids id key created accessed
-  all="$(entries | awk -F'\t' -v p="$prefix" 'index($2,p)==1 {print}')"
+  local all keep_ids id key created accessed ref
+  # ref filter: only entries this run's scope can actually see/use.
+  all="$(entries | awk -F'\t' -v p="$prefix" -v r="$CURRENT_REF" -v d="$DEFAULT_REF" \
+    'index($2,p)==1 && ($5==r || $5==d) {print}')"
   [ -z "$all" ] && return 0
   # Newest `keep` entries by created_at are the default survivors.
   keep_ids="$(printf '%s\n' "$all" | sort -k3 -r | head -n "$keep" | cut -f1)"
-  while IFS=$'\t' read -r id key created accessed; do
+  while IFS=$'\t' read -r id key created accessed ref; do
     if printf '%s\n' "$keep_ids" | grep -qx "$id"; then
       continue
     fi
-    # Active entries (recently accessed by any branch) are protected.
+    # Active entries (recently accessed, or access unknown) are protected.
     if [ -n "$accessed" ] && [ "$accessed" != "-" ]; then
       local t age
       # On parse failure treat as active (protect) rather than deleting.
@@ -63,7 +70,7 @@ prune_prefix() {
         continue
       fi
     fi
-    echo "prune: delete $key (id=$id, created $created)"
+    echo "prune: delete $key (id=$id, ref=$ref, created $created)"
     if [ "${DRY_RUN:-0}" = "1" ]; then
       echo "prune: DRY_RUN, not deleting"
     else

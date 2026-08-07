@@ -88,6 +88,7 @@ jobs:
         id: ci-hash
         run: |
           echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
       - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
@@ -108,8 +109,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: feeds-fanboy-
+          # Date-suffixed to match build.yml: an exact hit only skips the
+          # feeds update for same-day runs, keeping the snapshot fresh.
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
+          restore-keys: |
+            feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            feeds-fanboy-
       - name: Restore toolchain cache
         id: cache-tc
         uses: actions/cache/restore@v4
@@ -127,7 +132,6 @@ jobs:
           path: ${{ env.BUILD_DIR }}/.ccache
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
           restore-keys: |
-            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-
             ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             ccache-fanboy-
       - name: Install build dependencies
@@ -227,6 +231,7 @@ jobs:
         id: ci-hash
         run: |
           echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
       - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
@@ -236,17 +241,23 @@ jobs:
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/dl ${{ env.BUILD_DIR }}/feeds ${{ env.BUILD_DIR }}/.ccache
       - name: Restore dl cache
+        id: cache-dl
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/dl
           key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: dl-fanboy-
       - name: Restore feeds cache
+        id: cache-feeds
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: feeds-fanboy-
+          # Date-suffixed to match build.yml: an exact hit only skips the
+          # feeds update for same-day runs, keeping the snapshot fresh.
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
+          restore-keys: |
+            feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            feeds-fanboy-
       - name: Restore toolchain cache
         id: cache-tc
         uses: actions/cache/restore@v4
@@ -264,7 +275,6 @@ jobs:
           path: ${{ env.BUILD_DIR }}/.ccache
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
           restore-keys: |
-            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-
             ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             ccache-fanboy-
       - name: Install build dependencies
