@@ -1,0 +1,73 @@
+# ============================================================================
+# supersede 治理清单（数据驱动的补丁取代检测）
+# ============================================================================
+# 格式（每行一条，`#` 开头为注释，空行忽略）：
+#   目标补丁路径 | 取代来源描述 | 触发条件
+#
+# 目标补丁路径：
+#   相对 OpenWrt clone 根目录（apply-patches.sh 的 $CLONE）的补丁文件路径。
+#   注意：是 clone 内的路径，不是本仓库 patches/ 下的源路径 —— 机制删除的是
+#   clone 里的文件（与 remove_conflicting_patch 的约定一致）。若误写成
+#   patches/yyh/kernel/... 这样的源路径，脚本会给出提示。
+#
+# 取代来源描述：
+#   自由文本，说明被谁取代（上游 PR/commit/机制）。
+#   描述与路径中不得包含 `|`；路径中不得包含空格。
+#
+# 触发条件（三型）：
+#   kernel>=X.Y.Z   clone 的 target/linux/generic/kernel-X.Y 中
+#                   LINUX_VERSION-X.Y >= X.Y.Z 时触发（sort -V 比较；
+#                   该文件缺失时回退查找 include/kernel-X.Y）。
+#   file:<路径>     该路径在 clone 中存在即触发。路径支持通配符（* ? [），
+#                   用于容忍上游文件名漂移（如 921 案例的 fallback/fallb）。
+#   always          恒真。
+#   触发条件可加 verify: 前缀（verify:always、verify:file:...、
+#   verify:kernel>=...），表示仅告警不删除（dry-run 语义），用于
+#   "确认上游机制已覆盖后再删"的过渡期条目。
+#
+# 语义：条件成立时从 clone 删除目标补丁（被上游版本取代，避免同前缀补丁
+# 重复应用/冲突）；条件不成立时保留。条件无法求值（如版本文件缺失）一律
+# 视为不成立 —— fail-safe，宁可不删。
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 生效条目
+# ----------------------------------------------------------------------------
+
+# YYH 921：NPU firmware 加载修复。OpenWrt PR #24593 第 2/2 部分已以
+# "同内容、不同文件名"合入上游；上游文件在 clone 中出现后，两个 921-* 补丁
+# 会同时被内核构建应用（同号前缀，按文件名排序）-> 重复应用冲突。故上游版
+# 出现时删除我们的副本、保留上游版。
+# 注意：file: 条件末尾的 * 用于容忍上游文件名 fallback/fallb 的拼写漂移。
+target/linux/airoha/patches-6.18/921-net-airoha-npu-fix-firmware-loading-issue.patch | PR #24593 2/2 同内容上游版 | file:target/linux/airoha/patches-6.18/921-net-airoha-load-firmware-without-the-sysfs-fallb*.patch
+
+# YYH 922：按 DT 分类外部 LAN 口。openwrt master v7.2 165-04 的
+# AIROHA_PRIV_F_WAN 机制已覆盖此逻辑。但该机制只在 W1700K 双板验证过，
+# 需 XR1710G 单板验证通过后才可删除 —— 故用 verify:always：每次运行仅告警、
+# 永不删除。验证通过后把条件改为 always 即可启用删除。
+target/linux/airoha/patches-6.18/922-net-airoha-classify-external-lan-ports-from-DT.patch | master v7.2 165-04 AIROHA_PRIV_F_WAN 机制覆盖（需 XR1710G 单板验证后删，W1700K 双板） | verify:always
+
+# ----------------------------------------------------------------------------
+# 模板（当前未启用）
+# ----------------------------------------------------------------------------
+
+# mt76 0016（scan.c 部分）：上游 mt76 50480826 合入后应删除我们的副本。
+# 已核实：overlay/upstream-backports/package/kernel/mt76/patches/（仅有
+# 0001/0002）与 overlay/hurryman/package/kernel/mt76/patches/（仅有
+# 9990-9993）目前都没有 0016-wifi-mt76-reset-channel-state-during-scanning.patch
+# 对应的上游文件，故按约定暂不写生效条目。待上游对应文件进入任一 overlay
+# 后启用下行（建议把 file: 收窄为针对具体文件名的通配，避免仅因目录存在而
+# 每次告警）：
+# package/kernel/mt76/patches/0016-wifi-mt76-reset-channel-state-during-scanning.patch | 上游 mt76 50480826 已合入 scan.c 部分 | verify:file:package/kernel/mt76/patches/*reset-channel-state*.patch
+
+# ----------------------------------------------------------------------------
+# 迁移示例（对应 apply-patches.sh 中现有的 4 个硬编码 remove_conflicting_patch
+# 调用 —— v2 保留这些调用不动；迁移步骤 = 删掉对应硬编码行 + 取消注释下行）
+# 建议优先迁移 625/303 两条：语义恰好可用 kernel>=6.18.42 表达，且对旧内核
+# 的 clone 更正确（内核未到 6.18.42 时不删）。555/999 两条为无条件删除，
+# 映射 always；若追求"单一事实来源"也可迁移，否则维持现状即可。
+# ----------------------------------------------------------------------------
+# package/firmware/wireless-regdb/patches/555-w1700k-fix.patch | YYH 520/530 carry the same fixes | always
+# package/network/utils/iwinfo/patches/999-fix-txpower-list.patch | YYH 101 carries the same txpower fix | always
+# target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch | merged upstream in 6.18.42 | kernel>=6.18.42
+# target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch | merged upstream in 6.18.42 | kernel>=6.18.42

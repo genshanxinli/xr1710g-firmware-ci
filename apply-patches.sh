@@ -8,6 +8,8 @@ CLONE="${1:?Usage: apply-patches.sh <openwrt-clone> [<repo-root>]}"
 ROOT="${2:-$SCRIPT_DIR}"
 OVERLAY="$ROOT/overlay"
 PATCHES="$ROOT/patches"
+# Data-driven supersede governance list (format documented in supersede.list).
+SUPERSEDE_LIST="$ROOT/supersede.list"
 
 if [ ! -d "$CLONE" ]; then
   echo "ERROR: clone directory not found: $CLONE"
@@ -74,6 +76,128 @@ apply_patch_dir() {
   done < <(find "$dir" -type f -name '*.patch' -print0 | sort -z)
 }
 
+# === data-driven supersede governance ===
+# supersede.list format (full spec in supersede.list header):
+#   <clone-relative-target> | <reason> | <condition>
+# conditions: always | file:<glob-path> | kernel>=X.Y.Z
+# optional verify: prefix on the condition -> warn only, never delete.
+# Exit codes of supersede_condition_met: 0=met, 1=not met, 2=unknown/malformed.
+
+trim() {
+  # Strip leading/trailing whitespace (parameter expansion only, no forks).
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+majmin_of() {
+  # "6.18.42" -> "6.18"
+  local v="$1"
+  local rest="${v#*.}"
+  printf '%s.%s' "${v%%.*}" "${rest%%.*}"
+}
+
+version_ge() {
+  # True iff $1 >= $2 (dotted numeric versions, GNU sort -V).
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
+}
+
+get_kernel_version() {
+  # Resolve the clone's kernel version for a major.minor pair, e.g. "6.18".
+  # Prefers target/linux/generic/kernel-6.18 (OpenWrt layout), falls back to
+  # include/kernel-6.18. Prints the version (e.g. 6.18.42), or exits 1 if no
+  # version file / no parseable LINUX_VERSION-<maj.min> line.
+  local majmin="$1" cand v=""
+  for cand in "target/linux/generic/kernel-$majmin" "include/kernel-$majmin"; do
+    if [ -f "$CLONE/$cand" ]; then
+      v="$(sed -nE "s/^[[:space:]]*LINUX_VERSION-[0-9.]+[[:space:]]*[:+?]?=[[:space:]]*[\"']*([0-9][0-9.]*).*/\1/p" "$CLONE/$cand" | head -n1)"
+      [ -n "$v" ] && { echo "$v"; return 0; }
+    fi
+  done
+  return 1
+}
+
+supersede_condition_met() {
+  # Note: prefix-removal tests are used instead of case/[[ ]] patterns,
+  # because `>` in a case pattern or unquoted in [[ ]] is parsed as a
+  # redirection/conditional operator by bash.
+  local cond="$1" spec f kver majmin cur
+  if [ "$cond" = "always" ]; then
+    return 0
+  elif [ "${cond#file:}" != "$cond" ]; then
+    spec="${cond#file:}"
+    [ -n "$spec" ] || return 2
+    # Glob-aware existence check: the unquoted expansion matches any
+    # file/dir; with no match the literal pattern stays and fails [ -e ],
+    # so one loop covers both plain paths and globs.
+    for f in "$CLONE"/$spec; do
+      [ -e "$f" ] && return 0
+    done
+    return 1
+  elif [ "${cond#kernel>=}" != "$cond" ]; then
+    kver="${cond#kernel>=}"
+    [[ "$kver" =~ ^[0-9]+(\.[0-9]+)+$ ]] || return 2
+    majmin="$(majmin_of "$kver")"
+    cur="$(get_kernel_version "$majmin")" || return 1
+    version_ge "$cur" "$kver" || return 1
+    return 0
+  else
+    return 2
+  fi
+}
+
+resolve_superseded_patches() {
+  local list="$1" line target desc cond full_cond extra verify_mode=0
+  if [ ! -f "$list" ]; then
+    echo "WARNING: supersede list not found: $list (skipping governance pass)"
+    return 0
+  fi
+  echo "[supersede] resolving $list"
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="$(trim "$line")"
+    [ -n "$line" ] || continue
+    case "$line" in \#*) continue ;; esac
+    IFS='|' read -r target desc cond <<<"$line"
+    target="$(trim "$target")"; desc="$(trim "$desc")"; cond="$(trim "$cond")"
+    if [ -z "$target" ] || [ -z "$desc" ] || [ -z "$cond" ]; then
+      echo "FAIL: malformed supersede entry (need: target | reason | condition): $line"
+      exit 1
+    fi
+    full_cond="$cond"
+    case "$cond" in
+      verify:*) verify_mode=1; cond="${cond#verify:}" ;;
+      *) verify_mode=0 ;;
+    esac
+    if supersede_condition_met "$cond"; then
+      if [ "$verify_mode" -eq 1 ]; then
+        echo "  [verify] would remove superseded patch: $target ($desc; condition: $full_cond) (dry-run, not deleting)"
+      elif [ -f "$CLONE/$target" ]; then
+        rm -f "$CLONE/$target"
+        echo "  removed superseded patch: $target ($desc)"
+      elif [ -e "$ROOT/$target" ]; then
+        echo "  superseded patch already absent in clone: $target (note: file exists under repo ROOT — targets must be CLONE-relative paths)"
+      else
+        echo "  superseded patch already absent: $target"
+      fi
+    elif [ "$?" -eq 2 ]; then
+      echo "FAIL: unknown or malformed supersede condition \"$full_cond\" in entry: $target"
+      exit 1
+    else
+      extra=""
+      if [ "${cond#kernel>=}" != "$cond" ]; then
+        local kver="${cond#kernel>=}" majmin cur=""
+        if [[ "$kver" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+          majmin="$(majmin_of "$kver")"
+          cur="$(get_kernel_version "$majmin" || true)"
+          extra=" (clone $majmin: ${cur:-unknown})"
+        fi
+      fi
+      echo "  keep: $target ($full_cond not met$extra)"
+    fi
+  done < "$list"
+}
+
 echo "Applying XR1710G overlays to $CLONE"
 # Drop stale reject files from reused validation trees before applying overlays.
 find "$CLONE" -name "*.rej" -delete
@@ -90,6 +214,10 @@ copy_overlay "$OVERLAY/yyh" "yyh new-only files"
 copy_patch_files "$PATCHES/yyh/kernel" "$CLONE/target/linux/airoha/patches-6.18"
 copy_patch_files "$PATCHES/yyh/regdb" "$CLONE/package/firmware/wireless-regdb/patches"
 copy_patch_files "$PATCHES/yyh/mt76/patches" "$CLONE/package/kernel/mt76/patches"
+# Data-driven supersede governance: runs after all copies (entries may target
+# files produced by copy_patch_files, e.g. YYH kernel patches) and before the
+# apply passes (future entries may target patch dirs this script applies).
+resolve_superseded_patches "$SUPERSEDE_LIST"
 apply_patch_dir "$PATCHES/yyh/apply" "yyh package patches"
 copy_overlay "$OVERLAY/xr1710g" "xr1710g new files"
 apply_patch_dir "$PATCHES/xr1710g" "xr1710g adaptation patches"
