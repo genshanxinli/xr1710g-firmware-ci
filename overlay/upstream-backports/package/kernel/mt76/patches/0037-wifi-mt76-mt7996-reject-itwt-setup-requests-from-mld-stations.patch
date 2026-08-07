@@ -1,0 +1,35 @@
+From 2d57f1e70ef77092bf0683e33eea11f6c92fc229 Mon Sep 17 00:00:00 2001
+From: Howard Hsu <howard-yh.hsu@mediatek.com>
+Date: Fri, 24 Jul 2026 21:11:30 +0200
+Subject: [PATCH] wifi: mt76: mt7996: reject iTWT setup requests from MLD
+ stations
+
+The firmware does not support individual TWT agreements with non-AP MLDs,
+and the driver only tracks TWT flow state on the default link, which may
+not be the link the agreement was negotiated on. Reject TWT setup
+requests from MLD stations instead of programming an unsupported
+configuration.
+
+Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ mt7996/mac.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/mt7996/mac.c b/mt7996/mac.c
+index 2c7a6c338..36d61d0d8 100644
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -3226,6 +3226,12 @@ void mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
+ 	struct mt7996_twt_flow *flow;
+ 	u8 flowid, table_id, exp;
+ 
++	/* the firmware does not support iTWT agreements with MLD peers, and
++	 * driver TWT state is only tracked on the default link
++	 */
++	if (sta->mlo)
++		goto out;
++
+ 	if (mt7996_mac_check_twt_req(twt))
+ 		goto out;
+ 

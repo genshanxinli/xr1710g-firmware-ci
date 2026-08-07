@@ -1,8 +1,8 @@
 fanboy_repo: OpenWRT-fanboy/OpenW1700k
-fanboy_ref: refs/heads/ubi2-oc-auto
+# offload was force-deleted upstream on 2026-08-06; ubi2-oc is the
+# current active product line (openwrt master tip + 23 custom commits).
+fanboy_ref: refs/heads/ubi2-oc
 fanboy_role: base
-# Note: offload branch deleted upstream (2026-08-06); lock stays pinned at
-# 1fcc930 (bundle-backed) while tracking follows ubi2-oc-auto (current mainline).
 
 hurryman_repo: hurryman2212/OpenW1700k-test
 hurryman_ref: refs/heads/offload-oc

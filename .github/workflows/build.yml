@@ -9,7 +9,7 @@ concurrency:
 
 env:
   OW1700K_REPO: OpenWRT-fanboy/OpenW1700k
-  OW1700K_BRANCH: offload
+  OW1700K_BRANCH: ubi2-oc
   GLASS_REPO: rchen14b/luci-theme-glass
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt
@@ -27,7 +27,7 @@ jobs:
         with:
           path: ci-repo
 
-      - name: Clone locked fanboy offload base
+      - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
           for i in 1 2 3 4 5; do
@@ -294,7 +294,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: XR1710G Firmware ${{ github.ref_name }}
           body: |
-            Automated XR1710G firmware build atop fanboy offload.
+            Automated XR1710G firmware build atop fanboy ubi2-oc.
             Upstream commit: ${{ steps.clone.outputs.upstream_commit }}
           draft: false
           prerelease: false

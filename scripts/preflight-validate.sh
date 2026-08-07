@@ -89,6 +89,18 @@ for t in $targets; do
   esac
 done
 
+# Kernel first: package compiles (kmod-mt76, mac80211, ...) depend on the
+# generated linux-6.18.x/.config; building them before target/linux fails
+# with "No rule to make target .../.config" regardless of -k.
+ordered=""
+for t in target/linux $unique_targets; do
+  case " $ordered " in
+    *" $t "*) ;;
+    *) ordered="$ordered $t" ;;
+  esac
+done
+unique_targets="$ordered"
+
 mkdir -p "$(dirname "$REPORT")"
 {
   echo "# Preflight Report"

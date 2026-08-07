@@ -1,0 +1,31 @@
+From 22da92fdce235bd70fea9f4408054051d57202d9 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Thu, 2 Jul 2026 14:55:37 +0000
+Subject: [PATCH] wifi: mt76: mt7915: fix double hif2 init on the non-WED path
+
+mt7915_pci_init_hif2() was called unconditionally and again inside the
+WED-inactive branch. The helper increments the global hif_idx, writes the
+PCIe RECOG_ID register and takes a get_device() reference via
+mt7915_pci_get_hif2(), while removal only drops one reference. On non-WED
+dual-hif hardware this double-incremented hif_idx, wrote RECOG_ID twice and
+leaked a device reference. Only the call inside the WED-inactive branch is
+correct; drop the unconditional one. hif2 is already initialised to NULL.
+
+Fixes: cacdd67812c6 ("mt76: mt7915: add mt7915_mmio_probe() as a common probing function")
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ mt7915/pci.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/mt7915/pci.c b/mt7915/pci.c
+index f6b03211a..12b3e2dd5 100644
+--- a/mt7915/pci.c
++++ b/mt7915/pci.c
+@@ -135,7 +135,6 @@ static int mt7915_pci_probe(struct pci_dev *pdev,
+ 
+ 	mdev = &dev->mt76;
+ 	mt7915_wfsys_reset(dev);
+-	hif2 = mt7915_pci_init_hif2(pdev);
+ 
+ 	ret = mt7915_mmio_wed_init(dev, pdev, true, &irq);
+ 	if (ret < 0)

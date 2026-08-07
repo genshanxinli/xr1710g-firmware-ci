@@ -1,0 +1,59 @@
+From 8598aea7d6d5fd6cfdd5ffe8954148fe5cfdb86b Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Thu, 2 Jul 2026 15:09:01 +0000
+Subject: [PATCH] wifi: mt76: mt7996: bound EEPROM access event before copying
+
+mt7996_mcu_get_eeprom() copied the event->eeprom payload out of the
+firmware response skb without checking that the response actually held
+the bytes being read. A short or malformed response could read past the
+end of the skb. Reject a response shorter than the event header and bound
+each copy to the payload present in the skb.
+
+Fixes: 0da2e410705e ("wifi: mt76: mt7996: extend flexibility of mt7996_mcu_get_eeprom()")
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ mt7996/mcu.c | 18 ++++++++++++++++--
+ 1 file changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/mt7996/mcu.c b/mt7996/mcu.c
+index e6e2bbcd4..fa8332264 100644
+--- a/mt7996/mcu.c
++++ b/mt7996/mcu.c
+@@ -4595,6 +4595,11 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
+ 		return ret;
+ 
+ 	event = (struct mt7996_mcu_eeprom_access_event *)skb->data;
++	if (skb->len < sizeof(*event)) {
++		dev_kfree_skb(skb);
++		return -EINVAL;
++	}
++
+ 	if (event->valid) {
+ 		u32 ret_len = le32_to_cpu(event->eeprom.ext_eeprom.data_len);
+ 		u32 block = mode == EEPROM_MODE_EXT ? MT7996_EXT_EEPROM_BLOCK_SIZE :
+@@ -4615,14 +4620,23 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
+ 			if (!buf_len || buf_len > MT7996_EEPROM_BLOCK_SIZE)
+ 				buf_len = MT7996_EEPROM_BLOCK_SIZE;
+ 
++			if (event->eeprom.efuse + buf_len > skb->data + skb->len) {
++				ret = -EINVAL;
++				break;
++			}
+ 			memcpy(buf, event->eeprom.efuse, buf_len);
+ 			break;
+ 		case EEPROM_MODE_EXT:
+ 			if (!buf_len || buf_len > MT7996_EXT_EEPROM_BLOCK_SIZE)
+ 				buf_len = MT7996_EXT_EEPROM_BLOCK_SIZE;
++			if (ret_len < buf_len)
++				buf_len = ret_len;
+ 
+-			memcpy(buf, event->eeprom.ext_eeprom.data,
+-			       ret_len < buf_len ? ret_len : buf_len);
++			if (event->eeprom.ext_eeprom.data + buf_len > skb->data + skb->len) {
++				ret = -EINVAL;
++				break;
++			}
++			memcpy(buf, event->eeprom.ext_eeprom.data, buf_len);
+ 			break;
+ 		default:
+ 			ret = -EINVAL;

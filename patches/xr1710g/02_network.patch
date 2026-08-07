@@ -2,7 +2,7 @@ diff --git a/target/linux/airoha/an7581/base-files/etc/board.d/02_network b/targ
 index 107ca37..cf2d6bd 100644
 --- a/target/linux/airoha/an7581/base-files/etc/board.d/02_network
 +++ b/target/linux/airoha/an7581/base-files/etc/board.d/02_network
-@@ -17,6 +17,14 @@ an7581_setup_interfaces()
+@@ -17,6 +17,13 @@ an7581_setup_interfaces()
  	gemtek,w1700k-ubi)
  		ucidef_set_interfaces_lan_wan "lan2 lan3 lan4" "wan"
  		;;
@@ -12,7 +12,6 @@ index 107ca37..cf2d6bd 100644
 +		ucidef_set_wireless "2g" "XR1710G"
 +		ucidef_set_wireless "5g" "XR1710G-5G"
 +		ucidef_set_wireless "6g" "XR1710G-6G"
-+		ucidef_set_root_password_plain "password"
 +		;;
  	nokia,valyrian)
  		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 10g" "wan"
