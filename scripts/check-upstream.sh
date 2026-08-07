@@ -24,6 +24,13 @@ for name in fanboy hurryman yyh; do
     echo "ERROR: could not resolve $name" >&2
     exit 2
   fi
+  if [ "$name" = "fanboy" ]; then
+    # Tracked ref (ubi2-oc-auto) intentionally diverges from the pinned build
+    # base (1fcc930): report only, never trigger auto-refresh for fanboy.
+    echo "| $name | $old | $new (tracked, pinned base $old) |" >> "$report"
+    echo "TRACKED fanboy base=$old tracked=$new"
+    continue
+  fi
   if [ "$old" != "$new" ]; then
     changed=1
     echo "| $name | $old | $new |" >> "$report"

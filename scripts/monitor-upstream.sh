@@ -28,6 +28,7 @@ get_kernel_618() {
 }
 get_pr_state() { gh pr view "$1" --repo "$OW_REPO" --json state -q .state 2>/dev/null || echo "unknown"; }
 get_issue_state() { gh issue view "$1" --repo "$OW_REPO" --json state -q .state 2>/dev/null || echo "unknown"; }
+get_branch_sha() { git ls-remote "$1" "$2" 2>/dev/null | awk '{print $1}'; }
 get_w1700k_prs() {
   gh api "search/issues?q=repo:$OW_REPO+is:pr+w1700k+is:open&per_page=10" \
     --jq '[.items[].number] | sort | join(",")' 2>/dev/null || echo ""
@@ -39,14 +40,16 @@ KERNEL_618="$(get_kernel_618)"
 P22397="$(get_pr_state 22397)"
 P22697="$(get_pr_state 22697)"
 P24571="$(get_pr_state 24571)"
+P24593="$(get_pr_state 24593)"
 I24079="$(get_issue_state 24079)"
 W1700K="$(get_w1700k_prs)"
+FANBOY_AUTO="$(get_branch_sha "https://github.com/OpenWRT-fanboy/OpenW1700k.git" "refs/heads/ubi2-oc-auto")"
 
 if [ -z "$MT76_HEAD" ]; then echo "ERROR: could not query mt76 HEAD" >&2; exit 2; fi
 
 new_state() {
-  printf 'mt76_head=%s\nkernel_618=%s\npr_22397=%s\npr_22697=%s\npr_24571=%s\nissue_24079=%s\nw1700k_prs=%s\n' \
-    "$MT76_HEAD" "$KERNEL_618" "$P22397" "$P22697" "$P24571" "$I24079" "$W1700K"
+  printf 'mt76_head=%s\nkernel_618=%s\npr_22397=%s\npr_22697=%s\npr_24571=%s\npr_24593=%s\nissue_24079=%s\nw1700k_prs=%s\nfanboy_auto=%s\n' \
+    "$MT76_HEAD" "$KERNEL_618" "$P22397" "$P22697" "$P24571" "$P24593" "$I24079" "$W1700K" "$FANBOY_AUTO"
 }
 
 old_state() {
@@ -90,9 +93,11 @@ echo "--- suggested actions ---"
 [ "$P22397" != "open" ] && echo "  #22397 (XR1710G official support): now $P22397 -> if merged, run three-way alignment (official vs fanboy vs ours), rework overlay on official base"
 [ "$P22697" != "open" ] && echo "  #22697 (NPU firmware fix): now $P22697 -> check patches/yyh/kernel/921-net-airoha-npu-fix-firmware-loading-issue.patch for duplication"
 [ "$P24571" != "open" ] && echo "  #24571 (FW_LOADER_USER_HELPER_FALLBACK): now $P24571 -> evaluate overlap with yyh 921 NPU patch; verify NPU probe on device"
+[ "$P24593" != "open" ] && echo "  #24593 (NPU Wi-Fi memory only on WiFi board): now $P24593 -> evaluate NPU memory/offload impact"
 [ "$I24079" != "open" ] && echo "  #24079 (W1700K 1G ports no carrier): now $I24079 -> mirror upstream fix into runtime validation checklist (1G carrier test)"
 [ "$MT76_HEAD" != "$(field "$OLD" mt76_head)" ] && echo "  mt76 advanced to $MT76_HEAD -> wait for fanboy bump, then re-verify 22-patch sequence incl. upstream-backports"
 [ "$KERNEL_618" != "$(field "$OLD" kernel_618)" ] && echo "  kernel $KERNEL_618 released -> pre-verify 205-patch kernel sequence on new tarball"
+[ "$FANBOY_AUTO" != "$(field "$OLD" fanboy_auto)" ] && echo "  fanboy ubi2-oc-auto advanced to $FANBOY_AUTO -> evaluate migration (ubi2 layout, 9 dropped experimental patches, mt76 0015)"
 echo "--- end digest ---"
 
 mkdir -p "$ROOT/docs"
