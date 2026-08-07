@@ -34,7 +34,17 @@ HURRIAN_REPO="https://github.com/hurrian/openwrt-w1700k.git"
 MF_FW_REPO="https://github.com/OpenWRT-fanboy/mt76-firmware.git"
 FB_REPO="https://github.com/OpenWRT-fanboy/OpenW1700k.git"
 
-get_mt76_head() { git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}'; }
+get_mt76_head() {
+  # Retry once: CI runners occasionally hit transient network failures.
+  local head
+  head="$(git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}')"
+  if [ -z "$head" ]; then
+    sleep 3
+    head="$(git ls-remote "$MT76_REPO" HEAD 2>/dev/null | awk '{print $1}')"
+  fi
+  echo "$head"
+}
+get_branch_sha() { git ls-remote "$1" "$2" 2>/dev/null | awk '{print $1}'; }
 get_kernel_618() {
   curl -fsSL https://cdn.kernel.org/pub/linux/kernel/v6.x/ 2>/dev/null \
     | grep -oE 'linux-6\.18\.[0-9]+\.tar\.xz' | sort -V | tail -1 \
@@ -97,6 +107,7 @@ MF_260806="$(get_mf_260806_head)"
 FANBOY_BRANCHES="$(get_fanboy_branches)"
 FB_COUNT="$(printf '%s' "$FANBOY_BRANCHES" | tr ',' '\n' | grep -c . || true)"
 CMONROE="$(get_cmonroe_active)"
+FANBOY_AUTO="$(get_branch_sha "https://github.com/OpenWRT-fanboy/OpenW1700k.git" "refs/heads/ubi2-oc-auto")"
 
 if [ -z "$MT76_HEAD" ]; then echo "ERROR: could not query mt76 HEAD" >&2; exit 2; fi
 
@@ -105,8 +116,8 @@ new_state() {
     "$MT76_HEAD" "$KERNEL_618" "$P22397" "$P22697" "$P24571" "$I24079" "$W1700K"
   printf 'hurrian_xr1710g=%s\nhurrian_xr1710g_plus=%s\nhurrian_xr1710g_safe=%s\nnaoki66_head=%s\n' \
     "$H_XR1710G" "$H_XR1710G_PLUS" "$H_XR1710G_SAFE" "$NAOKI66"
-  printf 'pr_23644=%s\npr_24593=%s\npr_23141=%s\nmf_260806=%s\nfanboy_branches=%s\ncmonroe_active=%s\n' \
-    "$P23644" "$P24593" "$P23141" "$MF_260806" "$FANBOY_BRANCHES" "$CMONROE"
+  printf 'pr_23644=%s\npr_24593=%s\npr_23141=%s\nmf_260806=%s\nfanboy_branches=%s\ncmonroe_active=%s\nfanboy_auto=%s\n' \
+    "$P23644" "$P24593" "$P23141" "$MF_260806" "$FANBOY_BRANCHES" "$CMONROE" "$FANBOY_AUTO"
 }
 
 old_state() {
@@ -226,6 +237,7 @@ if [ "$FANBOY_BRANCHES" != "unknown" ] && [ "$FANBOY_BRANCHES" != "$(field "$OLD
 fi
 [ "$CMONROE" != "unknown" ] && [ "$CMONROE" != "$(field "$OLD" cmonroe_active)" ] \
   && echo "  cmonroe active again ($CMONROE) -> check target-airoha for new pushes/XR1710G config hints"
+[ "$FANBOY_AUTO" != "$(field "$OLD" fanboy_auto)" ] && echo "  fanboy ubi2-oc-auto advanced to $FANBOY_AUTO -> evaluate migration (ubi2 layout, 9 dropped experimental patches, mt76 0015)"
 echo "--- end digest ---"
 
 mkdir -p "$ROOT/docs"
