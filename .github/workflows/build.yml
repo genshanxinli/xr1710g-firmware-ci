@@ -14,18 +14,33 @@ env:
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt
   CI_REPO: ci-repo
-  CCACHE_MAXSIZE: 6G
+  # 4G cap: standard runners have only ~14G free disk; a larger ccache
+  # plus build_dir/staging_dir/dl would push the job off the disk.
+  CCACHE_MAXSIZE: 4G
   CCACHE_COMPRESS: "1"
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    # actions:write is required for cache save/delete (prune-caches.sh);
+    # contents:write for the release creation on tags. An explicit
+    # permissions block resets unlisted scopes to none.
+    permissions:
+      actions: write
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
         with:
           path: ci-repo
+
+      - name: Compute CI content hash
+        id: ci-hash
+        run: |
+          echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
 
       - name: Clone locked fanboy offload base
         id: clone
@@ -89,8 +104,13 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          # Keyed on base SHA + content hash of compile-relevant CI content:
+          # same content reuses the exact entry (no save churn), changed
+          # patches fall back to the previous content family via prefixes.
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
           restore-keys: |
+            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-
+            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             ccache-fanboy-
 
       - name: Install build dependencies
@@ -111,9 +131,14 @@ jobs:
             ${{ env.BUILD_DIR }}/package/luci-theme-glass
 
       - name: Update feeds
+        if: steps.cache-feeds.outputs.cache-hit != 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
           ./scripts/feeds update -a
+
+      - name: Install feeds
+        run: |
+          cd ${{ env.BUILD_DIR }}
           ./scripts/feeds install -a
 
       - name: Check feeds cache
@@ -184,6 +209,13 @@ jobs:
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
 
+      - name: Collect CI metrics (pre-build)
+        # After the toolchain step so the ccache binary (staging_dir/host)
+        # exists on both cache-hit and cache-miss paths.
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/ci-metrics.sh \
+            ${{ env.BUILD_DIR }} /tmp/ci-metrics.md pre-build
+
       - name: Check toolchain cache
         id: check-tc
         if: success() && steps.cache-tc.outputs.cache-hit != 'true'
@@ -239,7 +271,30 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BUILD_DIR }}/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
+
+      - name: Collect CI metrics (post-build)
+        if: always()
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/ci-metrics.sh \
+            ${{ env.BUILD_DIR }} /tmp/ci-metrics.md post-build
+
+      - name: Prune stale caches
+        # Keep the per-repo cache under the 10G limit so LRU eviction no
+        # longer silently deletes the active branch's ccache/toolchain.
+        if: always()
+        continue-on-error: true
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/prune-caches.sh
+
+      - name: Upload CI metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-metrics
+          path: /tmp/ci-metrics.md
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Surface build errors
         if: failure()
