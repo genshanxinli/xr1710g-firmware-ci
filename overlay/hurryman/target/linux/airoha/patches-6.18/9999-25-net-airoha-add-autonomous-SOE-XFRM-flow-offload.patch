@@ -13,12 +13,13 @@ Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 
 diff --git a/drivers/net/ethernet/airoha/airoha_ppe.c b/drivers/net/ethernet/airoha/airoha_ppe.c
 index 5082ee549bb7..1f5d44d905e9 100644
-@@ -9,12 +9,15 @@
+@@ -9,12 +9,16 @@
  #include <linux/of_platform.h>
  #include <linux/platform_device.h>
  #include <linux/rhashtable.h>
 +#include <linux/vmalloc.h>
  #include <net/ipv6.h>
++#include <net/netfilter/nf_flow_table.h>
  #include <net/pkt_cls.h>
  #include <net/route.h>
 +#include <net/xfrm.h>
