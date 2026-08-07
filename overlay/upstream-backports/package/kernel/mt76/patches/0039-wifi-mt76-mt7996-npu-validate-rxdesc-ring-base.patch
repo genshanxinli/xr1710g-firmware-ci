@@ -1,0 +1,62 @@
+From: OpenWrt <noreply@openwrt.org>
+Subject: [PATCH] wifi: mt76: mt7996: npu: validate firmware ring-base replies
+
+The NPU firmware (version 0.0 on XR1710G, behavior untrusted) replies to
+WLAN_FUNC_GET_WAIT_RXDESC_BASE with the host DMA address of a WLAN
+descriptor ring. mt7996_npu_rxd_init()/mt7996_npu_txd_init() wrote that
+reply straight into the MT7996 WFDMA ring-base registers. A garbage reply
+(mbox timeout during L1 SER recovery, firmware crash) programs the WiFi
+chip DMA to an arbitrary physical address; the resulting 32-bit DMA write
+clobbers 64-bit kernel pointers and panics the box.
+
+Validate the reply before writel(): non-zero, descriptor aligned (4 B),
+and inside the XR1710G (AN7581) NPU reserved DRAM window
+[0x8a000000, 0x90e06800) (npu-pkt / npu-txpkt / npu-txbufid / npu-ba, all
+nomap reserved memory, so DMA there can never corrupt the kernel). Any
+reply outside that window (kernel text/RAM, qdma buffers) fails NPU init
+instead of programming the register; the caller then tears the NPU data
+path down and runs the CPU path.
+
+The window constants are board specific; they mirror the DT
+reserved-memory layout of an7581-xr1710g-ubi.dts and should be derived
+from DT if this is ever upstreamed.
+
+--- a/mt7996/npu.c
++++ b/mt7996/npu.c
+@@ -8,6 +8,21 @@
+ 
+ #include "mt7996.h"
+ 
++/* XR1710G (AN7581) NPU reserved DRAM, contiguous from npu-pkt through
++ * npu-ba (an7581-xr1710g-ubi.dts, all nomap):
++ *   npu-pkt     0x8a000000 .. 0x8cbfffff
++ *   npu-txpkt   0x8cc00000 .. 0x90bfffff
++ *   npu-txbufid 0x90c00000 .. 0x90c067ff
++ *   npu-ba      0x90c06800 .. 0x90e067ff
++ * DMA writes inside this window can never corrupt kernel memory; any
++ * ring base outside of it is a firmware garbage reply and must not be
++ * programmed into the WFDMA ring-base registers.
++ */
++#define MT7996_NPU_DRAM_BASE		0x8a000000
++#define MT7996_NPU_DRAM_END		0x90e06800
++/* largest descriptor ring hosted in NPU DRAM (16 B entries) */
++#define MT7996_NPU_RING_MAX		(MT7996_RX_RING_SIZE * 16)
++
+ static int mt7996_npu_check_ring_base(struct mt7996_dev *dev, u32 val,
+ 				      const char *name)
+ {
+@@ -15,9 +30,12 @@
+ 	 * descriptor ring. A garbage reply (firmware version 0.0 / mbox
+ 	 * timeout during L1 SER recovery) would program the WiFi chip DMA
+ 	 * to an arbitrary physical address and corrupt host memory.
+-	 * Validate before writing it into the WFDMA ring-base register.
++	 * Validate before writing it into the WFDMA ring-base register:
++	 * non-zero, descriptor aligned and inside the NPU reserved DRAM.
+ 	 */
+-	if (!val || !IS_ALIGNED(val, 4)) {
++	if (!val || !IS_ALIGNED(val, 4) ||
++	    val < MT7996_NPU_DRAM_BASE ||
++	    val > MT7996_NPU_DRAM_END - MT7996_NPU_RING_MAX) {
+ 		dev_err(dev->mt76.dev, "NPU %s ring base invalid: 0x%08x\n",
+ 			name, val);
+ 		return -EINVAL;

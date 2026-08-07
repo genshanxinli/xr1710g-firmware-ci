@@ -1,0 +1,73 @@
+From: OpenWrt <noreply@openwrt.org>
+Subject: [PATCH] wifi: mt76: npu: drop corrupted RX frames instead of
+ trusting firmware lengths
+
+The RX descriptors are written by the NPU firmware (version 0.0 on
+XR1710G, behavior untrusted). mt76_npu_dequeue() fed the firmware
+length (NPU_RX_DMA_DESC_CUR_LEN_MASK) directly into __skb_put(), which
+overflows the skb data area on a corrupted descriptor and corrupts the
+heap from NAPI context. Airoha own code guards this (airoha_eth.c
+airoha_qdma_rx_process()); mirror it:
+ - drop the whole frame when a fragment length is zero or exceeds
+   SKB_WITH_OVERHEAD(q->buf_size), releasing the fragment buffers, and
+ - bound the firmware packet count by q->queued so a bogus count can
+   neither walk descriptors the host did not post nor underflow
+   q->queued.
+
+--- a/npu.c
++++ b/npu.c
+@@ -69,6 +69,10 @@
+ 
+ 	nframes = FIELD_GET(NPU_RX_DMA_PKT_COUNT_MASK, desc[index].info);
+ 	nframes = max_t(int, nframes, 1);
++	/* The count is written by the NPU firmware; never consume more
++	 * descriptors than the host has posted, or q->queued underflows.
++	 */
++	nframes = min_t(int, nframes, q->queued);
+ 
+ 	for (i = 0; i < nframes; i++) {
+ 		struct mt76_queue_entry *e = &q->entry[index];
+@@ -76,11 +80,11 @@
+ 				    desc[index].ctrl);
+ 
+ 		/* The descriptor is written by the NPU firmware; a corrupted
+-		 * length would overflow the skb data area below. Clamp to the
+-		 * buffer size, mirroring airoha_qdma_rx_process().
++		 * length would overflow the skb data area below. Drop the
++		 * whole frame instead, mirroring airoha_qdma_rx_process().
+ 		 */
+-		if (len > SKB_WITH_OVERHEAD(q->buf_size))
+-			len = 0;
++		if (!len || len > SKB_WITH_OVERHEAD(q->buf_size))
++			goto drop;
+ 
+ 		if (!FIELD_GET(NPU_RX_DMA_DESC_DONE_MASK, desc[index].ctrl)) {
+ 			dev_kfree_skb(skb);
+@@ -114,10 +118,26 @@
+ 		index = (index + 1) % q->ndesc;
+ 	}
+ 	q->tail = index;
+-	q->queued -= i;
++	q->queued -= nframes;
+ 	Q_WRITE(q, dma_idx, q->tail);
+ 
+ 	return skb;
++drop:
++	dev_kfree_skb(skb);
++	/* release the remaining fragment buffers of the dropped frame */
++	for (; i < nframes; i++, index = (index + 1) % q->ndesc) {
++		struct mt76_queue_entry *e = &q->entry[index];
++
++		dma_sync_single_for_cpu(dev->dma_dev, e->dma_addr[0],
++					e->dma_len[0],
++					page_pool_get_dma_dir(q->page_pool));
++		mt76_put_page_pool_buf(e->buf, false);
++	}
++	q->tail = index;
++	q->queued -= nframes;
++	Q_WRITE(q, dma_idx, q->tail);
++
++	return NULL;
+ }
+ 
+ void mt76_npu_check_ppe(struct mt76_dev *dev, struct sk_buff *skb,
