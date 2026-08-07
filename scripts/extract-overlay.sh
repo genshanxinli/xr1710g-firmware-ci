@@ -41,6 +41,23 @@ allowed_yyh() {
   return 1
 }
 
+# YYH-tree files that must NOT be re-extracted into overlay/yyh:
+#  0005/0047 -- upstreamed (EHT MCS-15 / RRO 3.0), deliberately dropped
+#  0006/0007 -- fanboy 0011/0010 carry the same fixes (base supplies them)
+#  0013       -- scan.c hunk upstreamed (mt76 50480826); the curated
+#                patches/yyh/mt76/patches/0016 cut-down version is canonical
+#  602/603    -- fanboy 053 / mtk-0015 already cover these
+#  9992       -- renumbered to 9994 (avoid clashing with hurryman mt76 9992)
+YYH_SKIP_RE="^package/kernel/mt76/patches/(0005|0006|0007|0013|0047|602|603|9992)-"
+
+skip_yyh() {
+  # $1 = clone-relative path; 0 = skip (do not extract), 1 = keep.
+  case "$1" in
+    package/kernel/mt76/patches/*) [[ "$1" =~ $YYH_SKIP_RE ]] && return 0 ;;
+  esac
+  return 1
+}
+
 copy_new_files() {
   local src="$1" dst="$2" filter="$3"
   shift 3
@@ -64,6 +81,9 @@ copy_new_files() {
       continue
     fi
     if ! "$filter" "$rel"; then
+      continue
+    fi
+    if ! skip_yyh "$rel"; then
       continue
     fi
     mkdir -p "$dst/$(dirname "$rel")"
