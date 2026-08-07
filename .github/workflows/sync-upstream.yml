@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
 
 permissions:
+  # actions:read is required for the cache restores below; with an
+  # explicit permissions block, unlisted scopes default to none.
+  actions: read
   contents: write
   pull-requests: write
   issues: write
@@ -15,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      SYNC_TREE: ${{ runner.temp }}/openwrt-sync
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
@@ -28,13 +32,53 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Clone locked fanboy base into sync tree
+        id: clone
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p ${{ env.SYNC_TREE }}
+          bash scripts/clone-base.sh ${{ env.SYNC_TREE }}
+          echo "upstream_commit=$(git -C ${{ env.SYNC_TREE }} rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Prepare sync tree cache paths
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p ${{ env.SYNC_TREE }}/dl \
+            ${{ env.SYNC_TREE }}/staging_dir \
+            ${{ env.SYNC_TREE }}/build_dir/host
+
+      - name: Restore dl cache
+        id: cache-dl
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.SYNC_TREE }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: dl-fanboy-
+
+      - name: Restore toolchain cache
+        id: cache-tc
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.SYNC_TREE }}/staging_dir
+            ${{ env.SYNC_TREE }}/build_dir/host
+            ${{ env.SYNC_TREE }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: toolchain-fanboy-
+
       - name: Refresh overlays and validate
         id: refresh
         if: steps.check.outputs.changed == 'true'
         continue-on-error: true
         run: |
           bash scripts/refresh-upstream.sh
-          bash scripts/validate-overlay.sh
+          FLAGS="--tree-dir=${{ env.SYNC_TREE }}"
+          if [ "${{ steps.cache-tc.outputs.cache-hit }}" = "true" ]; then
+            FLAGS="$FLAGS --toolchain-cached"
+          fi
+          bash scripts/validate-overlay.sh $FLAGS
 
       - name: Create conflict issue
         if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'failure'
