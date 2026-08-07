@@ -73,8 +73,8 @@ skip_yyh() {
 }
 
 copy_new_files() {
-  local src="$1" dst="$2" filter="$3"
-  shift 3
+  local src="$1" dst="$2" filter="$3" skipfn="$4"
+  shift 4
   local count=0 rel skip ex
   while IFS= read -r -d '' rel; do
     rel="${rel#./}"
@@ -97,10 +97,8 @@ copy_new_files() {
     if ! "$filter" "$rel"; then
       continue
     fi
-    if ! skip_yyh "$rel"; then
-      continue
-    fi
-    if ! skip_hurryman "$rel"; then
+    if "$skipfn" "$rel"; then
+      # skipfn returns 0 when the file must NOT be extracted.
       continue
     fi
     mkdir -p "$dst/$(dirname "$rel")"
@@ -115,11 +113,11 @@ clone hurryman2212/OpenW1700k-test offload-oc hurryman
 clone YYH2913/openwrt xr1710g-6.18-integration yyh
 
 echo "Extracting hurryman device-relevant new-only files..."
-hurryman_count="$(copy_new_files "$TMP/hurryman" "$ROOT/overlay/hurryman" allowed_hurryman "$TMP/fanboy")"
+hurryman_count="$(copy_new_files "$TMP/hurryman" "$ROOT/overlay/hurryman" allowed_hurryman skip_hurryman "$TMP/fanboy")"
 echo "hurryman overlay files: $hurryman_count"
 
 echo "Extracting YYH device-relevant new-only files..."
-yyh_count="$(copy_new_files "$TMP/yyh" "$ROOT/overlay/yyh" allowed_yyh "$TMP/fanboy" "$TMP/hurryman")"
+yyh_count="$(copy_new_files "$TMP/yyh" "$ROOT/overlay/yyh" allowed_yyh skip_yyh "$TMP/fanboy" "$TMP/hurryman")"
 echo "yyh overlay files: $yyh_count"
 
 mkdir -p "$ROOT/docs"

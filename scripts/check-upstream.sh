@@ -25,8 +25,8 @@ for name in fanboy hurryman yyh; do
     exit 2
   fi
   if [ "$name" = "fanboy" ]; then
-    # Tracked ref (ubi2-oc-auto) intentionally diverges from the pinned build
-    # base (1fcc930): report only, never trigger auto-refresh for fanboy.
+    # Tracked ref (ubi2-oc) equals the pinned build base (3624ae94):
+    # report only, never trigger auto-refresh for fanboy.
     echo "| $name | $old | $new (tracked, pinned base $old) |" >> "$report"
     echo "TRACKED fanboy base=$old tracked=$new"
     continue
