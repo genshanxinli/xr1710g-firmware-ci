@@ -18,10 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      SYNC_TREE: ${{ runner.temp }}/openwrt-sync
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
+
+      - name: Set sync tree path
+        # RUNNER_TEMP is a runner-provided shell env var; ${{ runner.temp }}
+        # is NOT accepted inside job-level env by the workflow parser.
+        run: |
+          echo "SYNC_TREE=$RUNNER_TEMP/openwrt-sync" >> "$GITHUB_ENV"
 
       - name: Check upstream SHAs
         id: check
