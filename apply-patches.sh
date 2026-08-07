@@ -26,7 +26,7 @@ copy_overlay() {
       mkdir -p "$CLONE/$(dirname "$rel")"
       cp -p "$src/$rel" "$CLONE/$rel"
     fi
-  done < <(cd "$src" && find . -type f -not -path '*/.git/*' -not -path '*/.github/*' -not -path '*/.devcontainer/*' -not -path '*/.vscode/*' -print0)
+  done < <(cd "$src" && find . -type f -not -path '*/.git/*' -not -path '*/.github/*' -not -path '*/.devcontainer/*' -not -path '*/.vscode/*' -not -path '*/.mimosa/*' -print0)
 }
 
 copy_patch_files() {
@@ -209,9 +209,6 @@ echo "Applying XR1710G overlays to $CLONE"
 find "$CLONE" -name "*.rej" -delete
 remove_conflicting_patch "package/firmware/wireless-regdb/patches/555-w1700k-fix.patch" "YYH 520/530 carry the same fixes"
 remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-list.patch" "YYH 101 carries the same txpower fix"
-# Upstream-merged in kernel 6.18.42 (see overlay/upstream-backports pin bump).
-remove_conflicting_patch "target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch" "merged upstream in 6.18.42"
-remove_conflicting_patch "target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch" "merged upstream in 6.18.42"
 # Upstream-merged in kernel 6.18.42 (see overlay/upstream-backports pin bump).
 remove_conflicting_patch "target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch" "merged upstream in 6.18.42"
 remove_conflicting_patch "target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch" "merged upstream in 6.18.42"

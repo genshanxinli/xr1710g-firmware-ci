@@ -26,6 +26,20 @@ allowed_hurryman() {
   return 1
 }
 
+# hurryman-tree mt76 patches that must NOT be re-extracted: 0013/0014
+# (airoha PPE flush series) were dropped per the fanboy production
+# stance -- apply-patches.sh removes them and re-importing via refresh
+# would silently resurrect them.
+HURRYMAN_SKIP_RE="^package/kernel/mt76/patches/001[34]-"
+
+skip_hurryman() {
+  # $1 = clone-relative path; 0 = skip (do not extract), 1 = keep.
+  case "$1" in
+    package/kernel/mt76/patches/*) [[ "$1" =~ $HURRYMAN_SKIP_RE ]] && return 0 ;;
+  esac
+  return 1
+}
+
 allowed_yyh() {
   case "$1" in
     package/firmware/wireless-regdb/*|\
@@ -84,6 +98,9 @@ copy_new_files() {
       continue
     fi
     if ! skip_yyh "$rel"; then
+      continue
+    fi
+    if ! skip_hurryman "$rel"; then
       continue
     fi
     mkdir -p "$dst/$(dirname "$rel")"

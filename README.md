@@ -38,7 +38,7 @@ PLAN.md                                 Local implementation plan, gitignored
 KANBAN.md                               Local kanban board, gitignored
 ```
 
-Most hurryman changes are vendored as new files under `overlay/hurryman/`, including the SOE/XFRM, EIP93, and mt76 kernel patch series. `patches/hurryman/` only holds curated diffs that modify files already present in the fanboy base, so it intentionally contains fewer files.
+Most hurryman changes are vendored as new files under `overlay/hurryman/`, including the SOE/XFRM and mt76 kernel patch series. `patches/hurryman/` only holds curated diffs that modify files already present in the fanboy base, so it intentionally contains fewer files.
 
 ## Patch Validation
 

@@ -70,6 +70,12 @@ get_naoki66_head() {
   sha="$(gh api "repos/naoki66/ImmortalWrt-for-Gemtek-XR1710G/commits?per_page=1" --jq '.[0].sha // ""' 2>/dev/null)" || { echo "unknown"; return; }
   [ -n "$sha" ] && echo "$sha" || echo "unknown"
 }
+get_rchen14b_head() {
+  # luci-app-airoha-npu standalone repo (28-star app hotspot).
+  local sha
+  sha="$(gh api "repos/rchen14b/luci-app-airoha-npu/commits?per_page=1" --jq '.[0].sha // ""' 2>/dev/null)" || { echo "unknown"; return; }
+  [ -n "$sha" ] && echo "$sha" || echo "unknown"
+}
 get_mf_260806_head() { get_branch_head "$MF_FW_REPO" "refs/heads/260806"; }
 get_cmonroe_active() {
   # Recent public activity date (YYYY-MM-DD). Events API is rate-limited
@@ -108,6 +114,7 @@ FANBOY_BRANCHES="$(get_fanboy_branches)"
 FB_COUNT="$(printf '%s' "$FANBOY_BRANCHES" | tr ',' '\n' | grep -c . || true)"
 CMONROE="$(get_cmonroe_active)"
 FANBOY_AUTO="$(get_branch_sha "https://github.com/OpenWRT-fanboy/OpenW1700k.git" "refs/heads/ubi2-oc-auto")"
+RCHEN14B="$(get_rchen14b_head)"
 
 if [ -z "$MT76_HEAD" ]; then echo "ERROR: could not query mt76 HEAD" >&2; exit 2; fi
 
@@ -116,8 +123,8 @@ new_state() {
     "$MT76_HEAD" "$KERNEL_618" "$P22397" "$P22697" "$P24571" "$I24079" "$W1700K"
   printf 'hurrian_xr1710g=%s\nhurrian_xr1710g_plus=%s\nhurrian_xr1710g_safe=%s\nnaoki66_head=%s\n' \
     "$H_XR1710G" "$H_XR1710G_PLUS" "$H_XR1710G_SAFE" "$NAOKI66"
-  printf 'pr_23644=%s\npr_24593=%s\npr_23141=%s\nmf_260806=%s\nfanboy_branches=%s\ncmonroe_active=%s\nfanboy_auto=%s\n' \
-    "$P23644" "$P24593" "$P23141" "$MF_260806" "$FANBOY_BRANCHES" "$CMONROE" "$FANBOY_AUTO"
+  printf 'pr_23644=%s\npr_24593=%s\npr_23141=%s\nmf_260806=%s\nfanboy_branches=%s\ncmonroe_active=%s\nfanboy_auto=%s\nrchen14b_head=%s\n' \
+    "$P23644" "$P24593" "$P23141" "$MF_260806" "$FANBOY_BRANCHES" "$CMONROE" "$FANBOY_AUTO" "$RCHEN14B"
 }
 
 old_state() {
@@ -237,6 +244,8 @@ if [ "$FANBOY_BRANCHES" != "unknown" ] && [ "$FANBOY_BRANCHES" != "$(field "$OLD
 fi
 [ "$CMONROE" != "unknown" ] && [ "$CMONROE" != "$(field "$OLD" cmonroe_active)" ] \
   && echo "  cmonroe active again ($CMONROE) -> check target-airoha for new pushes/XR1710G config hints"
+[ "$RCHEN14B" != "unknown" ] && [ "$RCHEN14B" != "$(field "$OLD" rchen14b_head)" ] \
+  && echo "  rchen14b/luci-app-airoha-npu advanced to $RCHEN14B -> check for app-level fixes to absorb into the tree"
 [ "$FANBOY_AUTO" != "$(field "$OLD" fanboy_auto)" ] && echo "  fanboy ubi2-oc-auto advanced to $FANBOY_AUTO -> evaluate migration (ubi2 layout, 9 dropped experimental patches, mt76 0015)"
 echo "--- end digest ---"
 

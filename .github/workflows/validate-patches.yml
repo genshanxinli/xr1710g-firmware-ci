@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ci-repo
-      - name: Clone locked fanboy offload base
+      - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
           bash ${{ env.CI_REPO }}/scripts/clone-base.sh ${{ env.BUILD_DIR }}
@@ -178,7 +178,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: ci-repo
-      - name: Clone locked fanboy offload base
+      - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
           bash ${{ env.CI_REPO }}/scripts/clone-base.sh ${{ env.BUILD_DIR }}
