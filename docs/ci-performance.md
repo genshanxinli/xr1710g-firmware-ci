@@ -54,10 +54,15 @@ restore 时 key 与 version 必须同时匹配。因此 sync-upstream 的树必�
 
 | 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | 固件编译 | ccache 命中 | 备注 |
 |---|---|---|---|---|---|---|---|
-| 2026-08-07 | 31215345340 | 全量构建（main，种子冷启动） | 1h30m35s | 40m47s 冷 | 39m04s | 11.2%（终态） | main scope 缓存已就位（toolchain/dl/feeds/ccache 全部保存）；ci-metrics artifact 数据：磁盘 54%、ccache 0.9GB |
+| 2026-08-07 | 31221627661 | 全量构建（main，warm） | **39m16s** | SKIPPED（exact hit） | 34m25s | **86.7%**（本轮新增调用；累计 47.1% 被种子冷跑稀释） | ✅ 阶段 1 目标达成（≤35min 差 4min，非编译开销占大头） |
+| 2026-08-07 | 31215345340 | 全量构建（main，种子冷启动） | 1h30m35s | 40m47s 冷 | 39m04s | 11.2%（累计） | main scope 缓存已就位；磁盘 54% 无压力 |
 | 2026-08-07 | 31206015949 | validate-patches 暖态（PR ref） | **5m28s** | SKIPPED（exact hit） | — | exact hit | 缓存闭环验证 ✓ |
 | 2026-08-07 | 31197841648 | validate-patches 冷态（PR ref） | 49m13s | 40m14s 重建 | — | 旧条目回退 | LRU 淘汰旧伤的残余一次性成本 |
 | 2026-08-07 | 31154480540 | 全量构建（基线） | 58m31s | cache hit | 53m18s | 49.3% | 基线（优化前） |
+
+**关键发现（阶段 2 依据）**：warm run 命中率 13%→87% 只让编译从 39m→34m（-12%）——
+非编译开销（~300 包 configure/stage/install/打包，不经 ccache）占大头；
+缓存 `build_dir/target-*` 可同时跳过两者，34m 预计可压至 ~15m（阶段 2，待批准）。
 
 回填方法：run 成功后下载 `ci-metrics` artifact，取其 `post-build` 段落：
 ccache 命中率 = `Hits / Cacheable calls`，缓存占用 = GitHub repo Settings →
