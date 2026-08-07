@@ -41,6 +41,7 @@ jobs:
         id: ci-hash
         run: |
           echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
 
       - name: Clone locked fanboy offload base
         id: clone
@@ -79,8 +80,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          # Date-suffixed: an exact hit only skips `feeds update -a` for
+          # runs on the same day, so the feed snapshot refreshes at least
+          # daily instead of freezing at the first run per base SHA.
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
           restore-keys: |
+            feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             feeds-fanboy-
 
       - name: Restore toolchain cache
@@ -109,7 +114,6 @@ jobs:
           # patches fall back to the previous content family via prefixes.
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
           restore-keys: |
-            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-
             ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             ccache-fanboy-
 
@@ -157,7 +161,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
 
       - name: Configure
         run: |

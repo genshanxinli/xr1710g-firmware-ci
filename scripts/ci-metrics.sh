@@ -10,7 +10,14 @@ CLONE="${1:?Usage: ci-metrics.sh <openwrt-dir> <output-md> [phase]}"
 OUT="${2:?Usage: ci-metrics.sh <openwrt-dir> <output-md> [phase]}"
 PHASE="${3:-build}"
 
-CCACHE_BIN="$(command -v ccache 2>/dev/null || echo "$CLONE/staging_dir/host/bin/ccache")"
+# The OpenWrt base exports CCACHE_DIR=$(TOPDIR)/.ccache only inside make,
+# so pass it explicitly — otherwise `ccache -s` would read the runner's
+# default ~/.cache/ccache (possibly a system ccache) and report garbage.
+CCACHE_BIN="$CLONE/staging_dir/host/bin/ccache"
+if [ ! -x "$CCACHE_BIN" ]; then
+  CCACHE_BIN="$(command -v ccache 2>/dev/null || true)"
+fi
+CCACHE_DIR="$CLONE/.ccache"
 SECTION="${TMPDIR:-/tmp}/ci-metrics-section-$$"
 trap 'rm -f "$SECTION"' EXIT
 
@@ -24,7 +31,7 @@ trap 'rm -f "$SECTION"' EXIT
   echo "### ccache"
   echo '```'
   if [ -x "$CCACHE_BIN" ]; then
-    "$CCACHE_BIN" -s 2>/dev/null || true
+    CCACHE_DIR="$CCACHE_DIR" "$CCACHE_BIN" -s 2>/dev/null || true
   else
     echo "ccache binary not found (expected at staging_dir/host/bin/ccache)"
   fi
