@@ -119,4 +119,9 @@ fi
 ls "$CLONE"/target/linux/airoha/patches-6.18/330-* \
    "$CLONE"/target/linux/airoha/patches-6.18/921-* >/dev/null 2>&1 \
   || { echo "FAIL: YYH kernel patch files missing"; exit 1; }
+# hostapd ENFILE fix must stay present in the base tree (pr-22908 / 053);
+# assert on the helper name rather than the patch file so a base rebase
+# that drops it fails loudly instead of silently losing the fix.
+grep -q "nl80211_use_existing_iface" "$CLONE/package/network/services/hostapd/patches/053-nl80211-Avoid-bogus-ENFILE-with-use_existing.patch" 2>/dev/null \
+  || { echo "FAIL: hostapd ENFILE fix (053) missing from base tree"; exit 1; }
 echo "All patches applied successfully."
