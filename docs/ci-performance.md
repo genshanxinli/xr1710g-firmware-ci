@@ -47,11 +47,13 @@
 
 ## 实测记录（优化后，按时间倒序）
 
-| 日期 | Run ID | 全量构建时长 | ccache 命中率 | 缓存占用 | 备注 |
-|---|---|---|---|---|---|
-| 2026-08-07 | 31154480540 | 58m31s | 49.3% | 9.1GB | 基线（优化前） |
-| | | | | | |
+| 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | preflight | ccache | 备注 |
+|---|---|---|---|---|---|---|---|
+| 2026-08-07 | 31206015949 | validate-patches 暖态（PR ref） | **5m28s** | SKIPPED（exact hit） | 1m51s | exact hit | 缓存闭环验证 ✓ |
+| 2026-08-07 | 31197841648 | validate-patches 冷态（PR ref） | 49m13s | 40m14s 重建 | 2m05s | 旧条目回退 | LRU 淘汰旧伤的残余一次性成本 |
+| 2026-08-07 | 31154480540 | 全量构建（基线） | 58m31s | cache hit | — | 49.3% | 基线（优化前） |
 
 回填方法：run 成功后下载 `ci-metrics` artifact，取其 `post-build` 段落：
 ccache 命中率 = `Hits / Cacheable calls`，缓存占用 = GitHub repo Settings →
-Actions → Caches 页总计。
+Actions → Caches 页总计。注：PR ref 与分支 ref 的缓存互相不可见（见上节），
+暖态时长仅在同一 ref 内可比；全量构建在 main 上 dispatch 后回填首行。
