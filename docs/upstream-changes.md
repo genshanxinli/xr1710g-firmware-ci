@@ -15,9 +15,24 @@ Generated: 2026-08-07 09:30 UTC
 - mt76: pin 7f4a3b71 (07-29) -> b2704cf5a4 (08-01) via patches/upstream-backports/0002
   - dropped overlay 0001/0002 (OOB fixes now upstream)
   - added 0022 (fanboy NPU wcid fix c4049715f1) + 0023-0038 (16 pending-branch hardening backports; reg-addr-remap skipped, same source as overlay/yyh 0022)
-- hurryman overlay: mt76 0013/0014 (airoha PPE flush on STA teardown), EIP93 series
-  (hack-6.18 925/926/9990/9991, pending-6.18 9915-9919; enhanced 926 replaces the plain upstream 926)
-- yyh overlay: mt76 0083 (wcid assignment) + 9994 (PS sync TLV validation, renumbered from 9992)
+- hurryman overlay: mt76 0013/0014 (airoha PPE flush on STA teardown) were added
+  then dropped again with the main merge (production stance: fanboy abandoned the
+  experimental PPE series; NPU wcid fix is the replacement)
+- yyh overlay: mt76 9994 (PS sync TLV validation, renumbered from 9992) and 0083
+  (wcid assignment) were added then dropped: both are already upstream in mt76
+  b2704cf5a4 (06b69763f2 covers PS sync; tx.c no longer contains the wcid->sta
+  block 0083 removes) -- verified against the real b2704cf5a4 source tree
+
+## Dropped: hurryman EIP93 hardening series (2026-08-07)
+
+The nine EIP93 patches from hurryman ubi2-oc-offload (9670049c/92799fd:
+hack-6.18 925/926/9990/9991, pending-6.18 9915-9919) failed to apply on the
+real 6.18.42 kernel source (8/9 patches, hunks across all eip93 files). The
+series was authored against a different base tree generation; combined with
+the Codex-assisted provenance this made the series unmaintainable. Reverted
+to the upstream base hack-6.18/926 (Aviana Cruz, carried by fanboy) and the
+EIP93 fixes already in 6.18.40 stable (devm_request_threaded_irq check,
+reset ring register definition).
 
 ## Corrections (verified against kernel.org changelogs)
 

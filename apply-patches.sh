@@ -169,6 +169,12 @@ resolve_superseded_patches() {
       verify:*) verify_mode=1; cond="${cond#verify:}" ;;
       *) verify_mode=0 ;;
     esac
+    # Defense in depth: supersede.list is repo-internal, but reject
+    # path traversal / absolute targets so a bad entry can never rm
+    # outside $CLONE.
+    case "$target" in
+      *..*|/*) echo "FAIL: supersede target escapes clone root: $target"; exit 1 ;;
+    esac
     if supersede_condition_met "$cond"; then
       if [ "$verify_mode" -eq 1 ]; then
         echo "  [verify] would remove superseded patch: $target ($desc; condition: $full_cond) (dry-run, not deleting)"
@@ -206,10 +212,9 @@ remove_conflicting_patch "package/network/utils/iwinfo/patches/999-fix-txpower-l
 # Upstream-merged in kernel 6.18.42 (see overlay/upstream-backports pin bump).
 remove_conflicting_patch "target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch" "merged upstream in 6.18.42"
 remove_conflicting_patch "target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch" "merged upstream in 6.18.42"
-# Replaced by the hurryman enhanced EIP93 series shipped in
-# overlay/hurryman/target/linux/generic/hack-6.18/926-* (adds Kconfig
-# switch + extra cipher code on top of the upstream base patch).
-remove_conflicting_patch "target/linux/generic/hack-6.18/926-crypto-eip93-use-AES-fallback-for-small-requests.patch" "superseded by hurryman enhanced EIP93 926 overlay"
+# Upstream-merged in kernel 6.18.42 (see overlay/upstream-backports pin bump).
+remove_conflicting_patch "target/linux/generic/backport-6.18/625-v7.0-ppp-enable-TX-scatter-gather.patch" "merged upstream in 6.18.42"
+remove_conflicting_patch "target/linux/generic/pending-6.18/303-powerpc-85xx-Add-fsl-ifc-to-common-device-ids.patch" "merged upstream in 6.18.42"
 # Dropped experimental PPE-flow series (fanboy production stance):
 # offload.08.06/ubi2-oc-auto abandoned 999-90..93 / 990-04/05 / 930 and
 # replaced the symptom fix with mt76 0015 (avoid stale NPU wcid reuse).
