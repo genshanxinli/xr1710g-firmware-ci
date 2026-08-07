@@ -1,17 +1,3 @@
-diff --git a/target/linux/airoha/an7581/config-6.18 b/target/linux/airoha/an7581/config-6.18
-index 95a383c..458b173 100644
---- a/target/linux/airoha/an7581/config-6.18
-+++ b/target/linux/airoha/an7581/config-6.18
-@@ -62,8 +62,7 @@ CONFIG_CONTEXT_TRACKING_IDLE=y
- CONFIG_CPUFREQ_DT=y
- CONFIG_CPUFREQ_DT_PLATDEV=y
- CONFIG_CPU_FREQ=y
--# CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND is not set
--CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
-+CONFIG_CPU_FREQ_DEFAULT_GOV_ONDEMAND=y
- CONFIG_CPU_FREQ_GOV_ATTR_SET=y
- CONFIG_CPU_FREQ_GOV_COMMON=y
- CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
 diff --git a/target/linux/airoha/dts/an7581.dtsi b/target/linux/airoha/dts/an7581.dtsi
 index d4038a9..5440a45 100644
 --- a/target/linux/airoha/dts/an7581.dtsi
