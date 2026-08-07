@@ -1,0 +1,48 @@
+#!/bin/sh
+#
+# TEMPORARY patch (test rig only, do NOT merge upstream):
+# Configure XR1710G as AP: static LAN IP 192.168.123.144, no LAN DHCP,
+# dropbear on port 2222 (matches lab environment), all radios as AP on lan.
+#
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "econet,xr1710g-ubi" ] || exit 0
+
+# --- LAN: static 192.168.123.144/24 -------------------------------------
+uci set network.lan.proto='static'
+uci set network.lan.ipaddr='192.168.123.144'
+uci set network.lan.netmask='255.255.255.0'
+
+# --- AP mode: no DHCP server on LAN (uplink provides addressing) --------
+uci set dhcp.lan.ignore='1'
+
+# --- SSH on 2222 (matches current lab access) ---------------------------
+uci set dropbear.@dropbear[0].Port='2222'
+
+# --- Wireless: enable all radios, force AP mode on br-lan ----------------
+config_load wireless
+set_ap_radio() {
+	local cfg="$1"
+	uci set wireless."$cfg".disabled='0'
+}
+set_ap_iface() {
+	local cfg="$1"
+	local mode network
+
+	config_get mode "$cfg" mode
+	config_get network "$cfg" network
+	[ "$mode" = "ap" ] || return
+	uci set wireless."$cfg".network='lan'
+	uci set wireless."$cfg".disabled='0'
+}
+config_foreach set_ap_radio wifi-device
+config_foreach set_ap_iface wifi-iface
+
+uci commit network
+uci commit dhcp
+uci commit dropbear
+uci commit wireless
+
+exit 0
