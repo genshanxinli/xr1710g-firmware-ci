@@ -8,21 +8,24 @@ Subject: [PATCH 40/89] mtk: mt76: mt7996: Fix call trace happened when wed
 
 Signed-off-by: Rex Lu <rex.lu@mediatek.com>
 ---
- mt7996/mmio.c | 1 +
- 1 file changed, 1 insertion(+)
+ mt7996/mmio.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index 9d0d3f163..277978add 100644
+index 168a338..5e6c2e5 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -614,6 +614,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
- 
- 	if (mtk_wed_device_attach(wed)) {
- 		dev->mt76.hwrro_mode = MT76_HWRRO_OFF;
-+		wed_enable = false;
- 		return 0;
+@@ -597,8 +597,10 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+ 		wed->wlan.reset_complete = mt76_wed_reset_complete;
  	}
  
+-	if (mtk_wed_device_attach(wed))
++	if (mtk_wed_device_attach(wed)) {
++		wed_enable = false;
+ 		return 0;
++	}
+ 
+ 	if (!hif2) {
+ 		dev->mt76.hwrro_mode = is_mt7996(&dev->mt76) ? MT76_HWRRO_V3
 -- 
 2.45.2
-
