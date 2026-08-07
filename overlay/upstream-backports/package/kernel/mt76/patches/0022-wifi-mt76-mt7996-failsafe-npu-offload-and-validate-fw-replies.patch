@@ -1,0 +1,211 @@
+From: genshanxinli <genshanxinli@users.noreply.github.com>
+Subject: [PATCH] wifi: mt76: mt7996: fail-safe NPU offload and validate firmware replies
+
+The b2704cf5a4 NPU offload data path can corrupt host memory when the
+NPU firmware is not fully operational. Three defects:
+
+1. mt7996_mac_reset_work() ignores the return value of
+   __mt7996_npu_hw_init(). During L1 SER recovery the PCIe link is
+   still settling, NPU mbox exchanges time out ("Message 00130022
+   timeout" / "failed setting NPU wlan PCIe port type"), and the NPU
+   rings are left partially initialized. The NPU DMA engine then
+   resumes with stale ring-base state and can write host memory at
+   wrong targets. Check the error and tear the NPU down so all NPU
+   data paths (rx poll, dma add buf, ppe check) fall back to the CPU
+   path instead of running with a half-initialized NPU.
+
+2. mt7996/mt7992_npu_rxd_init() and mt7996_npu_txd_init() program the
+   MT7996 WFDMA ring-base registers with firmware replies
+   (WLAN_FUNC_GET_WAIT_RXDESC_BASE) without any validation. A garbage
+   reply (firmware version 0.0 / mbox timeout) is written straight
+   into the chip and becomes a DMA target. Validate the reply
+   (non-zero, 4-byte aligned) before writing it to hardware.
+
+3. mt76_npu_dequeue() trusts NPU_RX_DMA_DESC_CUR_LEN from the
+   firmware-written descriptor and calls __skb_put(skb, len) without an
+   upper bound. Clamp the length to the buffer size, mirroring the
+   check in airoha_eth.c airoha_qdma_rx_process().
+
+Signed-off-by: genshanxinli <genshanxinli@users.noreply.github.com>
+---
+diff --git a/mt7996/mac.c b/mt7996/mac.c
+index 570f85d..5015d37 100644
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -2644,7 +2644,27 @@ void mt7996_mac_reset_work(struct work_struct *work)
+ 				     MT_INT_TX_RX_DONE_EXT);
+ 	}
+ 
+-	__mt7996_npu_hw_init(dev);
++	/* Re-init the NPU offload data path. During L1 SER recovery the
++	 * PCIe link is still settling, so NPU mbox exchanges can time out
++	 * and leave the NPU rings partially initialized. A half-initialized
++	 * NPU would resume DMA with stale ring-base state and corrupt host
++	 * memory, so on failure tear the NPU down and run the CPU data
++	 * path instead.
++	 */
++	if (mt76_npu_device_active(&dev->mt76)) {
++		struct airoha_npu *npu;
++		int err = __mt7996_npu_hw_init(dev);
++
++		if (err) {
++			dev_err(dev->mt76.dev,
++				"NPU re-init failed (%d), disabling NPU offload\n",
++				err);
++			npu = rcu_replace_pointer(dev->mt76.mmio.npu, NULL,
++						  lockdep_is_held(&dev->mt76.mutex));
++			if (npu)
++				airoha_npu_put(npu);
++		}
++	}
+ 
+ 	clear_bit(MT76_MCU_RESET, &dev->mphy.state);
+ 	mt7996_for_each_phy(dev, phy)
+diff --git a/mt7996/npu.c b/mt7996/npu.c
+index b8006b8..23ae371 100644
+--- a/mt7996/npu.c
++++ b/mt7996/npu.c
+@@ -8,6 +8,23 @@
+ 
+ #include "mt7996.h"
+ 
++static int mt7996_npu_check_ring_base(struct mt7996_dev *dev, u32 val,
++				      const char *name)
++{
++	/* The NPU firmware replies with the host DMA address of a WLAN
++	 * descriptor ring. A garbage reply (firmware version 0.0 / mbox
++	 * timeout during L1 SER recovery) would program the WiFi chip DMA
++	 * to an arbitrary physical address and corrupt host memory.
++	 * Validate before writing it into the WFDMA ring-base register.
++	 */
++	if (!val || !IS_ALIGNED(val, 4)) {
++		dev_err(dev->mt76.dev, "NPU %s ring base invalid: 0x%08x\n",
++			name, val);
++		return -EINVAL;
++	}
++	return 0;
++}
++
+ static int mt7992_npu_txrx_offload_init(struct mt7996_dev *dev,
+ 					struct airoha_npu *npu)
+ {
+@@ -251,6 +268,9 @@ static int mt7992_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retrieving NPU wlan rx ring0 addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "rx ring0");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND0].regs->desc_base);
+ 
+ 	err = mt76_npu_get_msg(npu, 1, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
+@@ -260,6 +280,9 @@ static int mt7992_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retrieving NPU wlan rx ring1 addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "rx ring1");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND1].regs->desc_base);
+ 
+ 	err = mt76_npu_get_msg(npu, 9, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
+@@ -269,6 +292,9 @@ static int mt7992_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retrieving NPU wlan rxdmad_c ring addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "rxdmad_c");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_RXDMAD_C].regs->desc_base);
+ 
+ 	return 0;
+@@ -286,6 +312,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan rx ring0 addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "rx ring0");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND0].regs->desc_base);
+ 
+ 	err = mt76_npu_get_msg(npu, 2, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
+@@ -295,6 +324,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan rx ring2 addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "rx ring2");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND2].regs->desc_base);
+ 
+ 	/* msdu pg ring */
+@@ -305,6 +337,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan msdu pg ring addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "msdu pg b0");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_MSDU_PAGE_BAND0].regs->desc_base);
+ 
+ 	err = mt76_npu_get_msg(npu, 11, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
+@@ -314,6 +349,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan msdu pg ring addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "msdu pg b1");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_MSDU_PAGE_BAND1].regs->desc_base);
+ 
+ 	err = mt76_npu_get_msg(npu, 12, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
+@@ -323,6 +361,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan msdu pg ring addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "msdu pg b2");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_MSDU_PAGE_BAND2].regs->desc_base);
+ 
+ 	/* ind_cmd ring */
+@@ -333,6 +374,9 @@ static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 			 "failed retriving NPU wlan ind_cmd ring addr\n");
+ 		return err;
+ 	}
++	err = mt7996_npu_check_ring_base(dev, val, "ind_cmd");
++	if (err)
++		return err;
+ 	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_IND].regs->desc_base);
+ 
+ 	return 0;
+@@ -361,6 +405,9 @@ static int mt7996_npu_txd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
+ 				 "failed retrieving NPU wlan tx ring addr\n");
+ 			return err;
+ 		}
++		err = mt7996_npu_check_ring_base(dev, val, "tx ring");
++		if (err)
++			return err;
+ 
+ 		phy_id = is_mt7996(&dev->mt76) ? band == MT_BAND0 ? 1 : 0
+ 					       : band;
+diff --git a/npu.c b/npu.c
+index dd954df..4202667 100644
+--- a/npu.c
++++ b/npu.c
+@@ -75,6 +75,13 @@ static struct sk_buff *mt76_npu_dequeue(struct mt76_dev *dev,
+ 		int len = FIELD_GET(NPU_RX_DMA_DESC_CUR_LEN_MASK,
+ 				    desc[index].ctrl);
+ 
++		/* The descriptor is written by the NPU firmware; a corrupted
++		 * length would overflow the skb data area below. Clamp to the
++		 * buffer size, mirroring airoha_qdma_rx_process().
++		 */
++		if (len > SKB_WITH_OVERHEAD(q->buf_size))
++			len = 0;
++
+ 		if (!FIELD_GET(NPU_RX_DMA_DESC_DONE_MASK, desc[index].ctrl)) {
+ 			dev_kfree_skb(skb);
+ 			return NULL;
+-- 
+2.43.0
