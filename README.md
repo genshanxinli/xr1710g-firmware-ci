@@ -77,7 +77,7 @@ To create a GitHub Release, run the same workflow from a `v*` tag.
 
 `sync-upstream.yml` runs every 6 hours and checks `upstream.lock.json` against:
 
-- fanboy `offload`
+- fanboy `offload.08.06`
 - hurryman `offload-oc`
 - YYH `xr1710g-6.18-integration`
 

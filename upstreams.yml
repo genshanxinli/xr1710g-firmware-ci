@@ -1,5 +1,5 @@
 fanboy_repo: OpenWRT-fanboy/OpenW1700k
-fanboy_ref: refs/heads/offload
+fanboy_ref: refs/heads/offload.08.06
 fanboy_role: base
 
 hurryman_repo: hurryman2212/OpenW1700k-test

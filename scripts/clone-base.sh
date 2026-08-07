@@ -17,5 +17,5 @@ mkdir -p "$DEST"
 git init -q "$DEST"
 git -C "$DEST" remote add origin "https://github.com/$REPO.git"
 GIT_TERMINAL_PROMPT=0 git -C "$DEST" fetch --depth 1 origin "$SHA"
-git -C "$DEST" checkout -q -b offload FETCH_HEAD
+git -C "$DEST" checkout -q -b offload.08.06 FETCH_HEAD
 echo "Cloned fanboy offload $SHA"

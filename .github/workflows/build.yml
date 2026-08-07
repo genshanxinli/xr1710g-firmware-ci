@@ -9,7 +9,7 @@ concurrency:
 
 env:
   OW1700K_REPO: OpenWRT-fanboy/OpenW1700k
-  OW1700K_BRANCH: offload
+  OW1700K_BRANCH: offload.08.06
   GLASS_REPO: rchen14b/luci-theme-glass
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt

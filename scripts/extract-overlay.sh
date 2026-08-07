@@ -73,7 +73,7 @@ copy_new_files() {
   echo "$count"
 }
 
-clone OpenWRT-fanboy/OpenW1700k offload fanboy
+clone OpenWRT-fanboy/OpenW1700k offload.08.06 fanboy
 clone hurryman2212/OpenW1700k-test offload-oc hurryman
 clone YYH2913/openwrt xr1710g-6.18-integration yyh
 
