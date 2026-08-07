@@ -8,13 +8,11 @@ Program SOE encryption and decryption flows while preserving OpenWrt PPE ownersh
 Assisted-by: Codex:gpt-5.6
 Signed-off-by: Jihong Min <hurryman2212@gmail.com>
 ---
- drivers/net/ethernet/airoha/airoha_ppe.c | 1386 ++++++++++++++++++++--
- 1 file changed, 1298 insertions(+), 88 deletions(-)
+ drivers/net/ethernet/airoha/airoha_ppe.c | 1287 ++++++++++++++++++--
+ 1 file changed, 1287 insertions(+), 95 deletions(-)
 
 diff --git a/drivers/net/ethernet/airoha/airoha_ppe.c b/drivers/net/ethernet/airoha/airoha_ppe.c
-index 2b9eff7..29b64d6 100644
---- a/drivers/net/ethernet/airoha/airoha_ppe.c
-+++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+index 5082ee549bb7..1f5d44d905e9 100644
 @@ -9,12 +9,15 @@
  #include <linux/of_platform.h>
  #include <linux/platform_device.h>
@@ -28,10 +26,10 @@ index 2b9eff7..29b64d6 100644
  #include "airoha_regs.h"
  #include "airoha_eth.h"
 +#include "airoha_soe.h"
- #include <linux/module.h>
- #include <net/switchdev.h>
- #include <net/netfilter/nf_flow_table.h>
-@@ -25,6 +28,25 @@
+ 
+ /* Serialize airoha_gdm_dev flags, QDMA pointer and PPE CPU port
+  * configuration.
+@@ -22,6 +25,25 @@
  DEFINE_MUTEX(flow_offload_mutex);
  static DEFINE_SPINLOCK(ppe_lock);
  
@@ -57,7 +55,7 @@ index 2b9eff7..29b64d6 100644
  static const struct rhashtable_params airoha_flow_table_params = {
  	.head_offset = offsetof(struct airoha_flow_table_entry, node),
  	.key_offset = offsetof(struct airoha_flow_table_entry, cookie),
-@@ -85,6 +107,100 @@ bool airoha_ppe_is_enabled(struct airoha_eth *eth, int index)
+@@ -82,6 +104,100 @@
  	return airoha_fe_rr(eth, REG_PPE_GLO_CFG(index)) & PPE_GLO_CFG_EN_MASK;
  }
  
@@ -158,7 +156,7 @@ index 2b9eff7..29b64d6 100644
  static u32 airoha_ppe_get_timestamp(struct airoha_ppe *ppe)
  {
  	return airoha_fe_get(ppe->eth, REG_FE_FOE_TS,
-@@ -200,6 +316,12 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+@@ -197,6 +313,12 @@
  				PPE_FLOW_CFG_IP6_6RD_MASK);
  	}
  
@@ -171,7 +169,7 @@ index 2b9eff7..29b64d6 100644
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
  		struct airoha_gdm_port *port = eth->ports[i];
  		int j;
-@@ -537,6 +659,133 @@ static int airoha_ppe_foe_entry_set_ipv6_tuple(struct airoha_foe_entry *hwe,
+@@ -534,6 +656,133 @@
  	return 0;
  }
  
@@ -305,7 +303,7 @@ index 2b9eff7..29b64d6 100644
  static u32 airoha_ppe_foe_get_entry_hash(struct airoha_ppe *ppe,
  					 struct airoha_foe_entry *hwe)
  {
-@@ -661,6 +910,9 @@ static void airoha_ppe_foe_flow_stats_update(struct airoha_ppe *ppe,
+@@ -658,6 +907,9 @@
  		meter = &hwe->ipv4.l2.meter;
  	}
  
@@ -315,7 +313,7 @@ index 2b9eff7..29b64d6 100644
  	pse_port = FIELD_GET(AIROHA_FOE_IB2_PSE_PORT, *ib2);
  	if (pse_port == FE_PSE_PORT_CDM4)
  		return;
-@@ -743,6 +995,79 @@ static bool airoha_ppe_foe_compare_entry(struct airoha_flow_table_entry *e,
+@@ -740,6 +992,79 @@
  	return !memcmp(&e->data.d, &hwe->d, len - sizeof(hwe->ib1));
  }
  
@@ -395,7 +393,7 @@ index 2b9eff7..29b64d6 100644
  static int airoha_ppe_foe_commit_sram_entry(struct airoha_ppe *ppe, u32 hash)
  {
  	struct airoha_foe_entry *hwe = ppe->foe + hash * sizeof(*hwe);
-@@ -759,29 +1084,67 @@ static int airoha_ppe_foe_commit_sram_entry(struct airoha_ppe *ppe, u32 hash)
+@@ -756,29 +1081,67 @@
  		     PPE_SRAM_CTRL_WR_MASK | PPE_SRAM_CTRL_REQ_MASK);
  
  	return read_poll_timeout_atomic(airoha_fe_rr, val,
@@ -474,7 +472,7 @@ index 2b9eff7..29b64d6 100644
  	rcu_read_lock();
  
  	npu = rcu_dereference(eth->npu);
-@@ -790,21 +1153,188 @@ static int airoha_ppe_foe_commit_entry(struct airoha_ppe *ppe,
+@@ -787,99 +1150,290 @@
  		goto unlock;
  	}
  
@@ -507,7 +505,8 @@ index 2b9eff7..29b64d6 100644
 -				       struct airoha_flow_table_entry *e)
 +static void airoha_ppe_soe_bind_cancel_locked(struct airoha_ppe *ppe,
 +					      struct airoha_flow_table_entry *e)
-+{
+ {
+-	struct airoha_foe_entry *hwe;
 +	lockdep_assert_held(&ppe_lock);
 +
 +	if (list_empty(&e->soe_bind_node))
@@ -522,15 +521,24 @@ index 2b9eff7..29b64d6 100644
 +					    u32 hash)
 +{
 +	struct airoha_flow_table_entry *e;
-+
-+	lockdep_assert_held(&ppe_lock);
-+
+ 
+ 	lockdep_assert_held(&ppe_lock);
+ 
+-	/* If the flow was never committed to hardware (e->hash == 0xffff),
+-	 * compute the hash slot from e->data and invalidate any stale BIND
+-	 * entry occupying that slot.
+-	 */
+-	if (e->hash == 0xffff && e->type == FLOW_TYPE_L4) {
+-		struct airoha_foe_entry invalid = {};
+-		u32 hash, state;
 +	list_for_each_entry(e, &ppe->soe_bind_pending, soe_bind_node) {
 +		if (e->soe_bind_hash == hash &&
 +		    airoha_ppe_foe_compare_entry(e, hwe))
 +			goto found;
 +	}
-+
+ 
+-		hash = airoha_ppe_foe_get_entry_hash(ppe, &e->data);
+-		hwe = airoha_ppe_foe_get_entry_locked(ppe, hash);
 +	return false;
 +
 +found:
@@ -604,9 +612,9 @@ index 2b9eff7..29b64d6 100644
 +}
 +
 +void airoha_ppe_soe_bind_ready(struct airoha_eth *eth)
- {
++{
 +	struct airoha_flow_table_entry *e, *tmp;
- 	struct airoha_foe_entry *hwe;
++	struct airoha_foe_entry *hwe;
 +	struct airoha_ppe *ppe;
 +
 +	if (!eth || !eth->ppe)
@@ -625,7 +633,15 @@ index 2b9eff7..29b64d6 100644
 +		list_del_init(&e->soe_bind_node);
 +
 +		hwe = airoha_ppe_foe_find_learned_entry(ppe, e, &learned_hash);
-+		if (hwe) {
+ 		if (hwe) {
+-			state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
+-			if (state == AIROHA_FOE_STATE_BIND) {
+-				invalid.ib1 = hwe->ib1;
+-				invalid.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
+-				invalid.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
+-							  AIROHA_FOE_STATE_INVALID);
+-				airoha_ppe_foe_commit_entry(ppe, &invalid, hash, false);
+-			}
 +			hash = learned_hash;
 +			e->soe_bind_hash = hash;
 +		} else {
@@ -642,14 +658,14 @@ index 2b9eff7..29b64d6 100644
 +			airoha_ppe_foe_claim_entry(ppe, e, hash);
 +			airoha_ppe_foe_add_soe_input_owner(ppe, e);
 +			continue;
-+		}
+ 		}
 +		airoha_soe_ppe_flow_bind_abort(&e->soe_flow);
 +		if (!err)
 +			err = airoha_ppe_foe_invalidate_entry(ppe, hwe, hash);
 +		if (err)
 +			airoha_ppe_soe_fail_locked(ppe,
 +						   "failed to commit drained SOE flow");
-+	}
+ 	}
 +	spin_unlock_bh(&ppe_lock);
 +}
 +
@@ -662,33 +678,10 @@ index 2b9eff7..29b64d6 100644
 +	u32 index = 0;
 +	int err = 0;
  
- 	lockdep_assert_held(&ppe_lock);
-+	airoha_ppe_soe_bind_cancel_locked(ppe, e);
- 
-@@ -813,78 +1343,102 @@ static void airoha_ppe_foe_remove_flow(struct airoha_ppe *ppe,
--	/* If the flow was never committed to hardware (e->hash == 0xffff),
--	 * compute the hash slot from e->data and invalidate any stale BIND
--	 * entry occupying that slot.
--	 */
--	if (e->hash == 0xffff && e->type == FLOW_TYPE_L4) {
--		struct airoha_foe_entry invalid = {};
--		u32 hash, state;
--
--		hash = airoha_ppe_foe_get_entry_hash(ppe, &e->data);
--		hwe = airoha_ppe_foe_get_entry_locked(ppe, hash);
--		if (hwe) {
--			state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
--			if (state == AIROHA_FOE_STATE_BIND) {
--				invalid.ib1 = hwe->ib1;
--				invalid.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
--				invalid.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
--							  AIROHA_FOE_STATE_INVALID);
--				airoha_ppe_foe_commit_entry(ppe, &invalid, hash, false);
--			}
--		}
--	}
--
 -	hlist_del_init(&e->list);
++	lockdep_assert_held(&ppe_lock);
++	airoha_ppe_soe_bind_cancel_locked(ppe, e);
++
 +	if (linked) {
 +		index = airoha_ppe_foe_get_entry_hash(ppe, &e->data);
 +		hlist_del_init(&e->list);
@@ -710,18 +703,15 @@ index 2b9eff7..29b64d6 100644
  		hwe = airoha_ppe_foe_get_entry_locked(ppe, e->hash);
 -		if (hwe && (e->type == FLOW_TYPE_L2_SUBFLOW ||
 -			    airoha_ppe_foe_compare_entry(e, hwe))) {
--			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
--			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
--						  AIROHA_FOE_STATE_INVALID);
--			airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash, false);
 +		if (!hwe || (e->type != FLOW_TYPE_L2_SUBFLOW &&
 +			     !airoha_ppe_foe_compare_entry(e, hwe))) {
 +			e->hash = 0xffff;
 +		} else {
 +			memcpy(&hwe_data, hwe, sizeof(hwe_data));
-+			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
-+			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
-+						  AIROHA_FOE_STATE_INVALID);
+ 			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
+ 			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
+ 						  AIROHA_FOE_STATE_INVALID);
+-			airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash, false);
 +			err = airoha_ppe_foe_commit_entry(ppe, &e->data,
 +							  e->hash, false);
 +			if (!err) {
@@ -811,7 +801,7 @@ index 2b9eff7..29b64d6 100644
  
  	hwe_p = airoha_ppe_foe_get_entry_locked(ppe, hash);
  	if (!hwe_p)
-@@ -934,7 +1488,11 @@ airoha_ppe_foe_commit_subflow(struct airoha_ppe *ppe,
+@@ -931,7 +1485,11 @@
  	}
  
  	hwe.bridge.data = bridge->bridge.data;
@@ -824,7 +814,7 @@ index 2b9eff7..29b64d6 100644
  }
  
  static int
-@@ -949,15 +1507,18 @@ airoha_ppe_foe_commit_subflow_entry(struct airoha_ppe *ppe,
+@@ -946,15 +1504,18 @@
  	if (!f)
  		return -ENOMEM;
  
@@ -845,7 +835,7 @@ index 2b9eff7..29b64d6 100644
  
  	return 0;
  }
-@@ -1048,15 +1609,16 @@ out:
+@@ -1045,15 +1606,16 @@
  }
  
  static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
@@ -866,13 +856,11 @@ index 2b9eff7..29b64d6 100644
  	struct hlist_node *n;
  	u32 index, state;
  
-@@ -1069,12 +1631,76 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
- 	if (!hwe)
+@@ -1067,11 +1629,75 @@
  		goto unlock;
  
--	state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
+ 	state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
 -	if (state == AIROHA_FOE_STATE_INVALID)
-+	state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
 +	hwe_bound = state == AIROHA_FOE_STATE_BIND;
 +	if (hwe_bound && airoha_ppe_soe_bind_hold_locked(ppe, hwe, hash))
 +		goto unlock;
@@ -946,7 +934,7 @@ index 2b9eff7..29b64d6 100644
  		if (e->type == FLOW_TYPE_L2_SUBFLOW) {
  			state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
  			if (state != AIROHA_FOE_STATE_BIND) {
-@@ -1088,7 +1714,53 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
+@@ -1085,9 +1711,59 @@
  		    !airoha_ppe_foe_compare_entry(e, hwe))
  			continue;
  
@@ -999,12 +987,6 @@ index 2b9eff7..29b64d6 100644
 +		}
 +committed:
  		commit_done = true;
- #ifdef CONFIG_NET_SWITCHDEV
- 		/* DIAG (999-90): aggregate per-second count of HW FOE commits
-@@ -1113,7 +1785,11 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
- 			}
- 		}
- #endif
 -		e->hash = hash;
 +		if (!err) {
 +			airoha_ppe_foe_claim_entry(ppe, e, hash);
@@ -1014,7 +996,7 @@ index 2b9eff7..29b64d6 100644
  	}
  
  	if (commit_done)
-@@ -1125,7 +1801,8 @@ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe,
+@@ -1099,7 +1775,8 @@
  	if (e)
  		airoha_ppe_foe_commit_subflow_entry(ppe, e, hash, rx_wlan);
  	else if (wdma_ready)
@@ -1024,7 +1006,7 @@ index 2b9eff7..29b64d6 100644
  unlock:
  	spin_unlock_bh(&ppe_lock);
  }
-@@ -1134,7 +1811,9 @@ static int
+@@ -1108,7 +1785,9 @@
  airoha_ppe_foe_l2_flow_commit_entry(struct airoha_ppe *ppe,
  				    struct airoha_flow_table_entry *e)
  {
@@ -1034,8 +1016,8 @@ index 2b9eff7..29b64d6 100644
 +	int err = 0;
  
  	e->type = FLOW_TYPE_L2;
- #ifdef CONFIG_NET_SWITCHDEV
-@@ -1173,16 +1852,95 @@ airoha_ppe_foe_l2_flow_commit_entry(struct airoha_ppe *ppe,
+ 	prev = rhashtable_lookup_get_insert_fast(&ppe->l2_flows, &e->l2_node,
+@@ -1119,16 +1798,95 @@
  	if (IS_ERR(prev))
  		return PTR_ERR(prev);
  
@@ -1134,11 +1116,11 @@ index 2b9eff7..29b64d6 100644
  
  	if (type == PPE_PKT_TYPE_BRIDGE)
  		return airoha_ppe_foe_l2_flow_commit_entry(ppe, e);
-@@ -1195,7 +1953,35 @@ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
- #endif
-  
-  	spin_lock_bh(&ppe_lock);
-- 	hlist_add_head(&e->list, &ppe->foe_flow[hash]);
+@@ -1138,10 +1896,211 @@
+ 	e->hash = 0xffff;
+ 
+ 	spin_lock_bh(&ppe_lock);
+-	hlist_add_head(&e->list, &ppe->foe_flow[hash]);
 +	if (e->soe_flow.sa && !e->soe_flow.input) {
 +		u32 soe_hash;
 +
@@ -1168,14 +1150,9 @@ index 2b9eff7..29b64d6 100644
 +	}
 +	if (!err)
 +		hlist_add_head(&e->list, &ppe->foe_flow[hash]);
-  	spin_unlock_bh(&ppe_lock);
- #ifdef CONFIG_NET_SWITCHDEV
- 	/* DIAG (999-90): a NEW SW flow_offload entry just got armed --
-@@ -1223,7 +2009,180 @@ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
- 	}
- #endif
+ 	spin_unlock_bh(&ppe_lock);
  
-- 	return 0;
+-	return 0;
 +	return err;
 +}
 +
@@ -1353,7 +1330,7 @@ index 2b9eff7..29b64d6 100644
  }
  
  static int airoha_ppe_get_entry_idle_time(struct airoha_ppe *ppe, u32 ib1)
-@@ -1296,17 +2255,19 @@ static void airoha_ppe_foe_flow_entry_update(struct airoha_ppe *ppe,
+@@ -1214,6 +2173,8 @@
  
  	if (e->hash == 0xffff)
  		goto unlock;
@@ -1362,18 +1339,7 @@ index 2b9eff7..29b64d6 100644
  
  	hwe_p = airoha_ppe_foe_get_entry_locked(ppe, e->hash);
  	if (!hwe_p)
- 		goto unlock;
- 
- 	memcpy(&hwe, hwe_p, sizeof(*hwe_p));
- 	if (!airoha_ppe_foe_compare_entry(e, &hwe)) {
- 		e->hash = 0xffff;
- 		goto unlock;
- 	}
- 
- 	e->data.ib1 = hwe.ib1;
- unlock:
- 	spin_unlock_bh(&ppe_lock);
-@@ -1320,19 +2281,59 @@ static int airoha_ppe_entry_idle_time(struct airoha_ppe *ppe,
+@@ -1238,19 +2199,59 @@
  	return airoha_ppe_get_entry_idle_time(ppe, e->data.ib1);
  }
  
@@ -1433,42 +1399,10 @@ index 2b9eff7..29b64d6 100644
 +	if (is_flowtable)
 +		tuple = (const void *)f->cookie;
 +
- 	e = rhashtable_lookup(&eth->flow_table, &f->cookie,
- 			      airoha_flow_table_params);
- #ifdef CONFIG_NET_SWITCHDEV
-@@ -1365,10 +2366,24 @@ static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
- 	}
- #endif
--	if (e) {
--		airoha_ppe_foe_flow_remove_entry(eth->ppe, e);
--		rhashtable_remove_fast(&eth->flow_table, &e->node,
--			       airoha_flow_table_params);
--		kfree(e);
--		e = NULL;
--	}
-+	if (e) {
-+		bool active_l2 = false;
-+
-+		if (e->type == FLOW_TYPE_L2 && !hlist_empty(&e->l2_flows) &&
-+		    flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CONTROL)) {
-+			struct flow_match_control match;
-+
-+			flow_rule_match_control(rule, &match);
-+			active_l2 = !match.key->addr_type;
-+		}
-+
-+		airoha_ppe_foe_flow_entry_update(eth->ppe, e);
-+		if (active_l2 || (e->hash != 0xffff &&
-+		     FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, e->data.ib1) ==
-+			     AIROHA_FOE_STATE_BIND))
-+			return -EEXIST;
-+
-+		err = airoha_ppe_flow_offload_remove(eth, e);
-+		if (err)
-+			return err;
-+	}
- 
-@@ -1434,6 +2439,8 @@ static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
+ 	if (rhashtable_lookup(&eth->flow_table, &f->cookie,
+ 			      airoha_flow_table_params))
+ 		return -EEXIST;
+@@ -1317,6 +2318,8 @@
  
  			if (act->mangle.htype == FLOW_ACT_MANGLE_HDR_TYPE_ETH)
  				airoha_ppe_flow_mangle_eth(act, &data.eth);
@@ -1477,7 +1411,7 @@ index 2b9eff7..29b64d6 100644
  			break;
  		case FLOW_ACTION_REDIRECT:
  			odev = act->dev;
-@@ -1458,6 +2465,11 @@ static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
+@@ -1341,6 +2344,11 @@
  			data.pppoe.sid = act->pppoe.sid;
  			data.pppoe.num++;
  			break;
@@ -1489,7 +1423,7 @@ index 2b9eff7..29b64d6 100644
  		default:
  			return -EOPNOTSUPP;
  		}
-@@ -1540,22 +2552,86 @@ static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
+@@ -1423,22 +2431,86 @@
  	if (!e)
  		return -ENOMEM;
  
@@ -1581,7 +1515,7 @@ index 2b9eff7..29b64d6 100644
  free_entry:
  	kfree(e);
  
-@@ -1589,16 +2665,16 @@ static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
+@@ -1449,20 +2521,129 @@
  					   struct flow_cls_offload *f)
  {
  	struct airoha_flow_table_entry *e;
@@ -1599,10 +1533,7 @@ index 2b9eff7..29b64d6 100644
 +	err = airoha_ppe_flow_offload_remove(eth, e);
 +	if (err)
 +		return err;
- #ifdef CONFIG_NET_SWITCHDEV
- 	/* DIAG (999-90): the SW flow_offload teardown chain
- 	 * (FLOW_CLS_DESTROY -> airoha_ppe_flow_offload_destroy) just
-@@ -1613,6 +2689,115 @@ static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
+ 
  	return 0;
  }
  
@@ -1715,10 +1646,10 @@ index 2b9eff7..29b64d6 100644
 +	mutex_unlock(&flow_offload_mutex);
 +}
 +
- /* ---- flush stale PPE flows on bridge FDB / WiFi STA MAC events -------- */
- 
- struct airoha_ppe_fdb_work {
-@@ -2073,11 +3258,12 @@ static int airoha_ppe_flow_offload_stats(struct airoha_eth *eth,
+ void airoha_ppe_foe_entry_get_stats(struct airoha_ppe *ppe, u32 hash,
+ 				    struct airoha_foe_stats64 *stats)
+ {
+@@ -1525,11 +2706,12 @@
  }
  
  static int airoha_ppe_flow_offload_cmd(struct airoha_eth *eth,
@@ -1733,7 +1664,7 @@ index 2b9eff7..29b64d6 100644
  	case FLOW_CLS_DESTROY:
  		return airoha_ppe_flow_offload_destroy(eth, f);
  	case FLOW_CLS_STATS:
-@@ -2182,7 +3368,8 @@ error_npu_put:
+@@ -1634,7 +2816,8 @@
  	return err;
  }
  
@@ -1743,7 +1674,7 @@ index 2b9eff7..29b64d6 100644
  {
  	struct airoha_ppe *ppe = dev->priv;
  	struct airoha_eth *eth = ppe->eth;
-@@ -2200,7 +3387,7 @@ int airoha_ppe_setup_tc_block_cb(struct airoha_ppe_dev *dev, void *type_data)
+@@ -1652,7 +2835,7 @@
  	if (!eth->npu)
  		err = airoha_ppe_offload_setup(eth);
  	if (!err)
@@ -1752,15 +1683,15 @@ index 2b9eff7..29b64d6 100644
  
  	mutex_unlock(&flow_offload_mutex);
  
-@@ -2554,6 +3741,7 @@ int airoha_ppe_init(struct airoha_eth *eth)
- 	ppe->dev.ops.flush_flows_by_mac = airoha_ppe_dev_flush_flows_by_mac_op;
+@@ -1767,6 +2950,7 @@
+ 	ppe->dev.ops.check_skb = airoha_ppe_check_skb;
  	ppe->dev.priv = ppe;
  	ppe->eth = eth;
 +	INIT_LIST_HEAD(&ppe->soe_bind_pending);
  	eth->ppe = ppe;
  
  	ppe_num_entries = airoha_ppe_get_total_num_entries(ppe);
-@@ -2563,9 +3751,8 @@ int airoha_ppe_init(struct airoha_eth *eth)
+@@ -1776,9 +2960,8 @@
  	if (!ppe->foe)
  		return -ENOMEM;
  
@@ -1772,7 +1703,7 @@ index 2b9eff7..29b64d6 100644
  	if (!ppe->foe_flow)
  		return -ENOMEM;
  
-@@ -2575,23 +3762,26 @@ int airoha_ppe_init(struct airoha_eth *eth)
+@@ -1788,23 +2971,26 @@
  		ppe->foe_stats = dmam_alloc_coherent(eth->dev, foe_size,
  						     &ppe->foe_stats_dma,
  						     GFP_KERNEL);
@@ -1808,7 +1739,7 @@ index 2b9eff7..29b64d6 100644
  
  	err = rhashtable_init(&ppe->l2_flows, &airoha_l2_flow_table_params);
  	if (err)
-@@ -2628,6 +3818,10 @@ error_l2_flow_table_destroy:
+@@ -1820,6 +3006,10 @@
  	rhashtable_destroy(&ppe->l2_flows);
  error_flow_table_destroy:
  	rhashtable_destroy(&eth->flow_table);
@@ -1819,7 +1750,7 @@ index 2b9eff7..29b64d6 100644
  
  	return err;
  }
-@@ -2655,4 +3850,6 @@ void airoha_ppe_deinit(struct airoha_eth *eth)
+@@ -1843,4 +3033,6 @@
  	rhashtable_destroy(&eth->ppe->l2_flows);
  	rhashtable_destroy(&eth->flow_table);
  	debugfs_remove(eth->ppe->debugfs_dir);
