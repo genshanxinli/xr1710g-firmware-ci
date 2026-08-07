@@ -1029,8 +1029,8 @@ index 5082ee549bb7..1f5d44d905e9 100644
 +	 * before commit_subflow_entry() writes the new BIND.  Without
 +	 * this, the deferred destroy callback calls remove_l2_flow() on
 +	 * the orphaned entry, and remove_flow() unconditionally invalidates
-+	 * these same hash slots (L2_SUBFLOW bypasses the compare_entry
-+	 * ownership check in 990-04), clobbering the new flow's binding.
++	 * these same hash slots (L2_SUBFLOW subflows bypass the generic
++	 * compare_entry ownership logic), clobbering the new flow's binding.
 +	 */
 +	spin_lock_bh(&ppe_lock);
 +	hlist_for_each_entry_safe(sub, tmp, &prev->l2_flows, l2_subflow_node) {
