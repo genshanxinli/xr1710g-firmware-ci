@@ -1,5 +1,5 @@
 #!/bin/bash
-# Apply XR1710G CI overlays to a fanboy offload OpenWrt clone.
+# Apply XR1710G CI overlays to a fanboy ubi2-oc OpenWrt clone.
 # Usage: apply-patches.sh <openwrt-clone> [<repo-root>]
 set -euo pipefail
 

@@ -10,7 +10,8 @@ on:
       - 'patches/**'
       - 'scripts/**'
       - 'upstream.lock.json'
-      - 'upstream.yml'
+      - 'upstreams.yml'
+      - 'supersede.list'
       - '.github/workflows/validate-patches.yml'
   workflow_dispatch:
     inputs:
