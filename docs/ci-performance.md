@@ -52,11 +52,12 @@ restore 时 key 与 version 必须同时匹配。因此 sync-upstream 的树必�
 
 ## 实测记录（优化后，按时间倒序）
 
-| 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | preflight | ccache | 备注 |
+| 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | 固件编译 | ccache 命中 | 备注 |
 |---|---|---|---|---|---|---|---|
-| 2026-08-07 | 31206015949 | validate-patches 暖态（PR ref） | **5m28s** | SKIPPED（exact hit） | 1m51s | exact hit | 缓存闭环验证 ✓ |
-| 2026-08-07 | 31197841648 | validate-patches 冷态（PR ref） | 49m13s | 40m14s 重建 | 2m05s | 旧条目回退 | LRU 淘汰旧伤的残余一次性成本 |
-| 2026-08-07 | 31154480540 | 全量构建（基线） | 58m31s | cache hit | — | 49.3% | 基线（优化前） |
+| 2026-08-07 | 31215345340 | 全量构建（main，种子冷启动） | 1h30m35s | 40m47s 冷 | 39m04s | 11.2%（终态） | main scope 缓存已就位（toolchain/dl/feeds/ccache 全部保存）；ci-metrics artifact 数据：磁盘 54%、ccache 0.9GB |
+| 2026-08-07 | 31206015949 | validate-patches 暖态（PR ref） | **5m28s** | SKIPPED（exact hit） | — | exact hit | 缓存闭环验证 ✓ |
+| 2026-08-07 | 31197841648 | validate-patches 冷态（PR ref） | 49m13s | 40m14s 重建 | — | 旧条目回退 | LRU 淘汰旧伤的残余一次性成本 |
+| 2026-08-07 | 31154480540 | 全量构建（基线） | 58m31s | cache hit | 53m18s | 49.3% | 基线（优化前） |
 
 回填方法：run 成功后下载 `ci-metrics` artifact，取其 `post-build` 段落：
 ccache 命中率 = `Hits / Cacheable calls`，缓存占用 = GitHub repo Settings →
