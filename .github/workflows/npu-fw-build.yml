@@ -21,24 +21,7 @@ jobs:
 
       - name: Patch SDK build issues
         working-directory: airoha-npu-fdk
-        run: |
-          python3 - <<'PYEOF'
-          # mt7996_fragment_queue_consumer.c: __builtin_assume_aligned expects
-          # const void*; volatile uint8_t* discards qualifiers (-Werror).
-          p = 'src/an7581/services/wifi/mt7996_fragment_queue_consumer.c'
-          s = open(p, encoding='utf-8').read()
-          old = """  packet_words = __builtin_assume_aligned(
-      consumer->packet_cached_memory +
-          (uint32_t)packet_id * NPU_WIFI_MT7996_PACKET_QUEUE_PACKET_SIZE,
-      sizeof(uint32_t));"""
-          new = """  packet_words = __builtin_assume_aligned(
-      (const void *)(consumer->packet_cached_memory +
-          (uint32_t)packet_id * NPU_WIFI_MT7996_PACKET_QUEUE_PACKET_SIZE),
-      sizeof(uint32_t));"""
-          assert old in s, "volatile-cast pattern not found"
-          open(p, 'w', encoding='utf-8').write(s.replace(old, new))
-          print("patched mt7996_fragment_queue_consumer.c volatile cast")
-          PYEOF
+        run: python3 ../.github/scripts/patch-npu-fdk.py .
 
       - name: Build NPU firmware
         working-directory: airoha-npu-fdk
