@@ -101,15 +101,27 @@ normalize_mtimes() {
   # Makefiles, files/) carry checkout-time mtimes NEWER than the restored
   # stamps — OpenWrt would otherwise re-prepare/re-build every package
   # (observed: warm build took 34m with 86% ccache hits — pure step
-  # overhead). Content is provably identical under the exact-key
-  # discipline, so normalize mtimes to now, making the restored stamps
-  # authoritative. build_dir/host + staging_dir/host are included: host
-  # tools (tools/*) re-run their full compile chains otherwise.
+  # overhead).
+  #
+  # TWO fixes are needed, both about mtime discipline:
+  # 1. This function sets the restored CACHED trees (build_dir/staging_dir)
+  #    to a FIXED epoch (not "now"): `touch -f` runs per-file at wall-clock
+  #    time, so later-touched files end up strictly newer than stamps and
+  #    make re-runs the whole prepare->configure->built chain.
+  # 2. The SOURCE TREE (package/ feeds/ tools/ target/) must be frozen to
+  #    the SAME epoch (scripts/freeze-source-mtimes.sh) — STAMP_PREPARED
+  #    embeds find_md5 which hashes "%p%T@\n" (content AND mtime, see
+  #    include/depends.mk), and the re-cloned sources otherwise compute a
+  #    different stamp name on every run, so the restored .prepared_<hash>
+  #    never matches by name (observed: warm still 14m55s, 258 rebuilds).
+  #    Equal mtimes make make treat stamps as up-to-date (it rebuilds only
+  #    when a prereq is strictly newer).
   local clone="$1"
-  echo "builddir-cache: normalizing restored tree mtimes (stamps become authoritative)"
+  local epoch="${FREEZE_EPOCH:-1786062016}"
+  echo "builddir-cache: normalizing restored tree mtimes to epoch $epoch (stamps become authoritative)"
   find "$clone"/build_dir/target-* "$clone"/staging_dir/target-* \
        "$clone"/build_dir/host "$clone"/staging_dir/host \
-    -exec touch -f {} + 2>/dev/null || true
+    -exec touch -d "@$epoch" {} + 2>/dev/null || true
 }
 
 strip_non_kernel_linux_dirs() {
