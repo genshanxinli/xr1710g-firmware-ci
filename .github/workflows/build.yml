@@ -326,25 +326,6 @@ jobs:
           bash ${{ env.CI_REPO }}/scripts/ci-metrics.sh \
             ${{ env.BUILD_DIR }} /tmp/ci-metrics.md pre-build
 
-      - name: Diagnose stamp staleness (TEMP)
-        # Why does a validated restore still rebuild? make -d shows the
-        # exact prerequisite that is newer than the restored stamps.
-        if: env.USE_BUILD_DIR_CACHE == 'true'
-        run: |
-          cd ${{ env.BUILD_DIR }}
-          echo "=== .config content hash ==="
-          sha256sum .config | cut -c1-16
-          grep -c "CONFIG_HAVE_DOT_CONFIG" .config || true
-          echo "=== openssl stamp chain mtimes ==="
-          ls -la --time-style=+%s build_dir/target-*/openssl-3.5.7/.prepared* \
-            build_dir/target-*/openssl-3.5.7/.configured* \
-            build_dir/target-*/openssl-3.5.7/.built 2>/dev/null
-          stat -c '%Y %n' staging_dir/target-*/pkginfo/*.version 2>/dev/null | head -5
-          echo "=== make -d FULL openssl compile chain ==="
-          make -d package/feeds/packages/openssl/compile -n 2>&1 \
-            | grep -E "Must remake|newer than|does not exist|is up to date|openssl-3.5.7" \
-            | head -50 || true
-
       - name: Check toolchain cache
         id: check-tc
         if: success() && steps.cache-tc.outputs.cache-hit != 'true'
