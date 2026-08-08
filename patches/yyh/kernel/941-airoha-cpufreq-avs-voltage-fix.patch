@@ -97,15 +97,5 @@ Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
  	return airoha_cpu_pll_set_freq(priv, state);
  }
 
---- a/target/linux/airoha/dts/an7581.dtsi
-+++ b/target/linux/airoha/dts/an7581.dtsi
-@@ -166,6 +166,6 @@
- 	cpufreq: cpufreq {
--		reg = <0x0 0x1fa20000 0x0 0x2c0>, <0x0 0x1efbe000 0x0 0x800>;
-+		reg = <0x0 0x1fa20000 0x0 0x300>, <0x0 0x1efbe000 0x0 0x800>;
- 		reg-names = "chip-scu", "mcucfg";
- 		compatible = "airoha,en7581-cpufreq";
- 
- 		operating-points-v2 = <&cpu_smcc_opp_table>;
 -- 
 2.43.0

@@ -1,0 +1,23 @@
+From: genshanxinli <genshanxinli@users.noreply.github.com>
+Subject: [PATCH] airoha: dts: widen cpufreq SCU reg to cover AVS DAC registers (1400MHz fix)
+
+The 941 AVS voltage fix (airoha-cpu-pmdomain.c) raises Vcore via the AVS
+DAC registers at chip-SCU offsets 0x2a0/0x2e0, but the cpufreq node only
+mapped reg 0x0..0x2c0 (PLLRG_PROTECT at 0x2c0 was the previous max).
+Widen the mapping to 0x300 so the pll_base ioremap covers the AVS DAC
+registers.  This hunk lives in the OpenWrt tree (target/linux/airoha/dts)
+where the patch tool applies against the tree path; it must NOT be part
+of the kernel-side 941 patch (quilt applies inside the kernel source).
+
+--- a/target/linux/airoha/dts/an7581.dtsi
++++ b/target/linux/airoha/dts/an7581.dtsi
+@@ -166,6 +166,6 @@
+ 	cpufreq: cpufreq {
+-		reg = <0x0 0x1fa20000 0x0 0x2c0>, <0x0 0x1efbe000 0x0 0x800>;
++		reg = <0x0 0x1fa20000 0x0 0x300>, <0x0 0x1efbe000 0x0 0x800>;
+ 		reg-names = "chip-scu", "mcucfg";
+ 		compatible = "airoha,en7581-cpufreq";
+ 
+ 		operating-points-v2 = <&cpu_smcc_opp_table>;
+-- 
+2.43.0
