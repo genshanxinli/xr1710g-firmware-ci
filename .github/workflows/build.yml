@@ -254,11 +254,13 @@ jobs:
         if: env.USE_BUILD_DIR_CACHE == 'true'
         uses: actions/cache/restore@v4
         with:
-          # Package dirs are <pkg>-<version> (no package-* prefix); the
-          # extglob excludes the kernel objtree (tb channel) but keeps
-          # linux-firmware-* and root-*.
+          # @actions/glob has no extglob, so the whole build_dir/target-*
+          # (incl. the kernel objtree, also covered by tb) is the package
+          # channel. Correctness is preserved by the key invariant (kernel
+          # change => full hash change => tp misses) and the tb channel
+          # independently keeps the kernel warm on package-only changes.
           path: |
-            ${{ env.BUILD_DIR }}/build_dir/target-*/!(linux-*)
+            ${{ env.BUILD_DIR }}/build_dir/target-*
             ${{ env.BUILD_DIR }}/staging_dir/target-*
             ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
           key: ${{ steps.bdc-keys.outputs.tp_key }}
@@ -375,7 +377,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ env.BUILD_DIR }}/build_dir/target-*/!(linux-*)
+            ${{ env.BUILD_DIR }}/build_dir/target-*
             ${{ env.BUILD_DIR }}/staging_dir/target-*
             ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
           key: ${{ steps.bdc-keys.outputs.tp_key }}

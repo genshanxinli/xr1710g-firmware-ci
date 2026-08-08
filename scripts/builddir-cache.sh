@@ -72,10 +72,17 @@ package_artifacts() {
 
 prepare_save() {
   local clone="${1:?prepare-save <openwrt-dir> <kernel-hash> <full-hash>}"
-  local khash="${2:?}" fhash="${3:?}"
-  local meta
-  meta="$(meta_dir "$clone")"
-  [ -n "$meta" ] || { echo "builddir-cache: no build_dir/target-*/.ci-meta — nothing to mark"; return 0; }
+  local khash="${2:?}" fhash="${3:?}" meta
+  # .ci-meta lives inside build_dir/target-* and is included in BOTH
+  # channel path lists; it is created here (first run) if absent.
+  meta="$(ls -d "$clone"/build_dir/target-*/.ci-meta 2>/dev/null | head -1 || true)"
+  if [ -z "$meta" ]; then
+    local tgt
+    tgt="$(ls -d "$clone"/build_dir/target-* 2>/dev/null | head -1 || true)"
+    [ -n "$tgt" ] || { echo "builddir-cache: no build_dir/target-* — nothing to mark"; return 0; }
+    mkdir -p "$tgt/.ci-meta"
+    meta="$tgt/.ci-meta"
+  fi
   printf '%s\n' "$khash" > "$meta/kernel-hash"
   printf '%s\n' "$fhash" > "$meta/full-hash"
   kernel_artifacts "$clone" > "$meta/kernel.sha256"
