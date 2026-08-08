@@ -464,3 +464,16 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&hsuart_pins>;
 };
+
+/* NPU firmware (20260622-r2) does not implement the WLAN_FUNC_GET_WAIT_
+ * RXDESC_BASE command expected by the b2704cf mt76 NPU offload data path
+ * (firmware replies 0x00000000, fw version 0.0). The misbehaving firmware
+ * performs host-memory DMA at wrong targets and corrupts the kernel text
+ * region (pstore: 0x7fffffc080xxxxxx 32-bit overwrite pattern), causing
+ * panics even when the driver side is hardened. Disable the NPU node so
+ * the firmware is never loaded/run; WiFi continues on the CPU data path.
+ * Re-enable once a matching NPU firmware is available upstream.
+ */
+&npu {
+	status = "disabled";
+};
