@@ -1,0 +1,45 @@
+#!/bin/sh
+#
+# XR1710G AP-mode fixes (iterates on 19-xr1710g-ap-mode):
+# - lan gateway + DNS (NTP/DNS resolution fix)
+# - disable IPv6 RA/DHCPv6 (avoid ULA prefix pollution in AP mode)
+# - disable wan interface + wan firewall zone residue
+# - generate /etc/fw_env.config (30_uboot-envtools absent in this base)
+#
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "econet,xr1710g-ubi" ] || exit 0
+
+# --- LAN upstream (gateway + DNS) -----------------------------------------
+uci set network.lan.gateway='192.168.123.1'
+uci set network.lan.dns='192.168.123.1'
+
+# --- IPv6: no RA/DHCPv6 in AP mode (upstream provides) ---------------------
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ra_slaac='0'
+uci set dhcp.lan.ra_management='0'
+
+# --- Disable wan interface + wan zone residue (pure AP) ---------------------
+uci set network.wan.disabled='1'
+uci set network.wan6.disabled='1'
+uci delete firewall.wan 2>/dev/null || true
+uci delete firewall.wan6 2>/dev/null || true
+uci delete firewall.@forwarding[0] 2>/dev/null || true
+
+# --- fw_env.config (30_uboot-envtools missing in this base) ------------------
+if [ ! -f /etc/fw_env.config ]; then
+	cat > /etc/fw_env.config <<'EOF'
+# MTD device name       Device offset      Env. size       Flash sector size
+/dev/ubi0_1             0x0               0x1000          0x1000
+/dev/ubi0_2             0x0               0x1000          0x1000
+EOF
+fi
+
+uci commit network
+uci commit dhcp
+uci commit firewall
+
+exit 0
