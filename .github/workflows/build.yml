@@ -79,8 +79,14 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/dl
-          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          # Exact key is made unmatchable (ci_hash suffix) so restore ALWAYS
+          # falls through to the prefix fallback, which returns the NEWEST
+          # matching entry — the post-build save's complete, content-hashed
+          # snapshot. A plain `dl-fanboy-<commit>` exact key would forever
+          # hit the first (possibly tarball-incomplete) generation instead.
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
           restore-keys: |
+            dl-fanboy-${{ steps.clone.outputs.upstream_commit }}-
             dl-fanboy-
 
       - name: Prepare feeds cache path
@@ -215,25 +221,6 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Compute dl cache key
-        # Content-hashed dl key: tarballs restored from an old cache entry
-        # can be incomplete (observed: 29 tarballs re-downloaded every run
-        # because cache-hit=true skipped the save forever), and STAMP_PREPARED
-        # depends on $(DL_DIR)/$(FILE). A content-hash key lets a run that
-        # filled gaps save a NEW entry instead of being refused by
-        # actions/cache (which never overwrites an existing key).
-        id: dl-key
-        if: success()
-        run: |
-          echo "dl_hash=$(bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh dl-hash ${{ env.BUILD_DIR }}/dl)" >> "$GITHUB_OUTPUT"
-
-      - name: Save dl cache
-        if: success() && steps.check-dl.outputs.exists == 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.BUILD_DIR }}/dl
-          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.dl-key.outputs.dl_hash }}
 
       - name: Freeze source tree mtimes
         # STAMP_PREPARED embeds find_md5, which hashes "%p%T@\n" — file
@@ -450,6 +437,25 @@ jobs:
             ${{ env.BUILD_DIR }}/staging_dir/target-*
             ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
           key: ${{ steps.bdc-keys.outputs.tp_key }}
+
+      - name: Compute dl hash (post-build)
+        # dl/ is now complete: feeds/packages tarballs that were missing
+        # from the restored cache get downloaded during the build's prepare
+        # phase (make download alone only fetches tools/target/luci), so
+        # the pre-build hash is stale. Content-hashed key => a gap-filling
+        # run stores a NEW entry (actions/cache never overwrites); the
+        # restore prefix fallback picks the newest, complete one.
+        id: dl-key-post
+        if: success()
+        run: |
+          echo "dl_hash=$(bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh dl-hash ${{ env.BUILD_DIR }}/dl)" >> "$GITHUB_OUTPUT"
+
+      - name: Save dl cache (post-build)
+        if: success() && steps.check-dl.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.dl-key-post.outputs.dl_hash }}
 
       - name: Kernel fingerprint canary
         # C1: compare the shipped kernel-1 sub-image against the previous
