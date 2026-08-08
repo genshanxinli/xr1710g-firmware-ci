@@ -254,9 +254,11 @@ jobs:
         if: env.USE_BUILD_DIR_CACHE == 'true'
         uses: actions/cache/restore@v4
         with:
+          # Package dirs are <pkg>-<version> (no package-* prefix); the
+          # extglob excludes the kernel objtree (tb channel) but keeps
+          # linux-firmware-* and root-*.
           path: |
-            ${{ env.BUILD_DIR }}/build_dir/target-*/package-*
-            ${{ env.BUILD_DIR }}/build_dir/target-*/root-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/!(linux-*)
             ${{ env.BUILD_DIR }}/staging_dir/target-*
             ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
           key: ${{ steps.bdc-keys.outputs.tp_key }}
@@ -343,7 +345,7 @@ jobs:
         run: |
           set +e
           if ls -d ${{ env.BUILD_DIR }}/build_dir/target-*/linux-* >/dev/null 2>&1 \
-             && ls -d ${{ env.BUILD_DIR }}/build_dir/target-*/package-* >/dev/null 2>&1; then
+             && ls -d ${{ env.BUILD_DIR }}/staging_dir/target-* >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -373,8 +375,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            ${{ env.BUILD_DIR }}/build_dir/target-*/package-*
-            ${{ env.BUILD_DIR }}/build_dir/target-*/root-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/!(linux-*)
             ${{ env.BUILD_DIR }}/staging_dir/target-*
             ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
           key: ${{ steps.bdc-keys.outputs.tp_key }}

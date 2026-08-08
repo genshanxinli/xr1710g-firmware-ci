@@ -58,8 +58,14 @@ kernel_artifacts() {
 }
 
 package_artifacts() {
-  # $1 = openwrt dir; prints sorted sha256 lines of package compile products
-  ( cd "$1" && find build_dir/target-*/package-* staging_dir/target-* -type f \
+  # $1 = openwrt dir; prints sorted sha256 lines of package compile products.
+  # build_dir/target-* package dirs are named <pkg>-<version> (no package-*
+  # prefix) and the linux-* dirs (kernel objtree + linux-firmware package)
+  # are pruned here — kernel products are fingerprinted separately.
+  ( cd "$1" && find build_dir/target-* -type d -name 'linux-*' -prune -o \
+      -type f \( -name '*.o' -o -name '*.ko' -o -name '*.so*' -o -name '*.a' \) -print0 \
+    | sort -z | xargs -0 -r sha256sum ; \
+    find staging_dir/target-* -type f \
       \( -name '*.o' -o -name '*.ko' -o -name '*.so*' -o -name '*.a' \) -print0 \
     | sort -z | xargs -0 -r sha256sum )
 }
@@ -83,6 +89,20 @@ wipe_channels() {
   rm -rf "$clone"/build_dir/target-* "$clone"/staging_dir/target-*
 }
 
+strip_non_kernel_linux_dirs() {
+  # The linux-* glob in the tb channel also matches package dirs such as
+  # linux-firmware-<ver>. The kernel objtree always contains a nested
+  # linux-<ver> source dir; anything matching linux-* without one is a
+  # package and must be dropped so it rebuilds instead of going stale.
+  local clone="$1" d
+  while IFS= read -r -d '' d; do
+    if ! ls -d "$d"/linux-* >/dev/null 2>&1; then
+      echo "builddir-cache: stripping non-kernel dir from restored tb channel: $(basename "$d")"
+      rm -rf "$d"
+    fi
+  done < <(find "$clone"/build_dir/target-* -maxdepth 1 -type d -name 'linux-*' -print0 2>/dev/null)
+}
+
 validate() {
   local clone="${1:?validate <openwrt-dir> <kernel-hash> <full-hash> <tb-hit> <tp-hit>}"
   local khash="${2:?}" fhash="${3:?}" tb_hit="${4:-false}" tp_hit="${5:-false}"
@@ -96,6 +116,7 @@ validate() {
     elif ! diff -q <(kernel_artifacts "$clone") "$meta/kernel.sha256" >/dev/null 2>&1; then
       bad=1; wipe_channels "$clone" "kernel artifact fingerprint mismatch"
     else
+      strip_non_kernel_linux_dirs "$clone"
       echo "builddir-cache: kernel channel validated OK"
     fi
   fi
