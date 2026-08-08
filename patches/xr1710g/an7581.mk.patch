@@ -16,7 +16,7 @@ index 2095d8a..c0ed58c 100644
    UBINIZE_OPTS := -E 5
    BLOCKSIZE := 128k
    PAGESIZE := 2048
-@@ -121,6 +122,46 @@ define Device/gemtek_w1700k-ubi
+@@ -121,6 +122,47 @@ define Device/gemtek_w1700k-ubi
  endef
  TARGET_DEVICES += gemtek_w1700k-ubi
  
