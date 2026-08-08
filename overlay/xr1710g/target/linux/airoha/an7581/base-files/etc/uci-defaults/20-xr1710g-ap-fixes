@@ -58,4 +58,27 @@ uci commit network
 uci commit dhcp
 uci commit firewall
 
+# --- SEC03: dropbear host keys baked into image -> regenerate on first boot ---
+if [ -f /etc/dropbear/dropbear_ed25519_host_key ] && \
+   [ "$(stat -c %Y /etc/dropbear/dropbear_ed25519_host_key)" -ge "$(stat -c %Y /etc/openwrt_release 2>/dev/null || echo 0)" ]; then
+	rm -f /etc/dropbear/dropbear_*_host_key
+	echo "regenerated dropbear host keys (image-baked keys removed)"
+fi
+/etc/init.d/dropbear restart 2>/dev/null
+
+# --- SEC05: LuCI HTTPS self-signed certificate if missing ---
+if [ ! -f /etc/uhttpd.crt ]; then
+	if command -v openssl >/dev/null 2>&1; then
+		openssl req -x509 -newkey rsa:2048 -keyout /etc/uhttpd.key -out /etc/uhttpd.crt \
+			-days 3650 -nodes -subj "/CN=xr1710g.lan" 2>/dev/null
+		chmod 600 /etc/uhttpd.key
+		uci set uhttpd.main.listen_https='0.0.0.0:443'
+		uci commit uhttpd
+		/etc/init.d/uhttpd restart 2>/dev/null
+		echo "generated self-signed HTTPS certificate"
+	else
+		echo "openssl missing; HTTPS certificate skipped" >&2
+	fi
+fi
+
 exit 0
