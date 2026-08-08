@@ -30,3 +30,20 @@ if old not in s:
 else:
     p.write_text(s.replace(old, new), encoding="utf-8")
     print("patched mt7996_fragment_queue_consumer.c volatile cast")
+
+# Issue 2: src/an7581/runtime/memory.c provides npu_memmove() and libc-style
+# memcpy()/memset() aliases but no memmove() alias; src/.../tunnel/udf.c calls
+# memmove() -> undefined symbol at link. Add the alias.
+m = root / "src/an7581/runtime/memory.c"
+t = m.read_text(encoding="utf-8")
+if "void *memmove(" not in t:
+    anchor = "void *memcpy(void *destination, const void *source, size_t length) {\n  return npu_memcpy(destination, source, length);\n}\n"
+    assert anchor in t, "memcpy anchor not found in memory.c"
+    t = t.replace(
+        anchor,
+        anchor + "\nvoid *memmove(void *destination, const void *source, size_t length) {\n  return npu_memmove(destination, source, length);\n}\n",
+    )
+    m.write_text(t, encoding="utf-8")
+    print("patched runtime/memory.c: added memmove() alias")
+else:
+    print("memory.c memmove alias already present")
