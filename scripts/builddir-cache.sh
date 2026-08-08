@@ -85,6 +85,7 @@ prepare_save() {
   fi
   printf '%s\n' "$khash" > "$meta/kernel-hash"
   printf '%s\n' "$fhash" > "$meta/full-hash"
+  printf '%s\n' "${FREEZE_EPOCH:-1786062016}" > "$meta/freeze-epoch"
   kernel_artifacts "$clone" > "$meta/kernel.sha256"
   package_artifacts "$clone" > "$meta/package.sha256"
   echo "builddir-cache: markers + fingerprints written ($(wc -l < "$meta/kernel.sha256") kernel, $(wc -l < "$meta/package.sha256") package artifacts)"
@@ -141,8 +142,24 @@ strip_non_kernel_linux_dirs() {
 validate() {
   local clone="${1:?validate <openwrt-dir> <kernel-hash> <full-hash> <tb-hit> <tp-hit>}"
   local khash="${2:?}" fhash="${3:?}" tb_hit="${4:-false}" tp_hit="${5:-false}"
-  local meta bad=0
+  local meta bad=0 epoch_now epoch_saved
   meta="$(meta_dir "$clone")"
+
+  # Epoch mismatch: caches saved before freeze-source-mtimes (or under a
+  # different FREEZE_EPOCH) carry STAMP_PREPARED names that never match —
+  # the tree rebuilds fully but the SAVE step would skip (cache-hit=true)
+  # and the bad generation would be immortalized. Signal the workflow to
+  # force re-save by clearing the cache-hit flags.
+  epoch_now="${FREEZE_EPOCH:-1786062016}"
+  epoch_saved="$(cat "$meta/freeze-epoch" 2>/dev/null || echo "")"
+  if [ "$tb_hit" = "true" ] || [ "$tp_hit" = "true" ]; then
+    if [ -z "$epoch_saved" ] || [ "$epoch_saved" != "$epoch_now" ]; then
+      echo "::warning::builddir-cache: saved freeze-epoch ($epoch_saved) != current ($epoch_now) — stamps incompatible, forcing re-save"
+      if [ "$tb_hit" = "true" ]; then tb_hit="false"; fi
+      if [ "$tp_hit" = "true" ]; then tp_hit="false"; fi
+      echo "force_resave=true" >> "${GITHUB_OUTPUT:-/dev/null}"
+    fi
+  fi
 
   if [ "$tb_hit" = "true" ]; then
     if [ -z "$meta" ] || [ ! -f "$meta/kernel-hash" ] \
