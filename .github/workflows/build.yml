@@ -382,8 +382,10 @@ jobs:
       - name: Kernel fingerprint canary
         # C1: compare the shipped kernel-1 sub-image against the previous
         # run; "kernel changed with same inputs" or "inputs changed with
-        # same kernel" both warn loudly.
+        # same kernel" both warn loudly. Never fatal: a canary hiccup must
+        # not block the cache saves below.
         if: env.USE_BUILD_DIR_CACHE == 'true' && success()
+        continue-on-error: true
         run: |
           ITB="$(ls ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*-sysupgrade.itb 2>/dev/null | head -1)"
           if [ -n "$ITB" ]; then
