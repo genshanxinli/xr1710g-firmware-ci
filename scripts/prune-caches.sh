@@ -84,3 +84,7 @@ prune_prefix "ccache-" "$KEEP_CCACHE"
 prune_prefix "toolchain-" "$KEEP_TOOLCHAIN"
 prune_prefix "dl-" "$KEEP_DL"
 prune_prefix "feeds-" "$KEEP_FEEDS"
+# Phase-2 build_dir channels: old generations are useless after a hash
+# change (cold rebuild), so one generation each is enough.
+prune_prefix "tb-" 1
+prune_prefix "tp-" 1
