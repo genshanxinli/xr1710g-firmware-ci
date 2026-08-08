@@ -24,7 +24,14 @@ jobs:
 
       - name: Patch SDK build issues
         working-directory: airoha-npu-fdk
-        run: python3 "$GITHUB_WORKSPACE/.github/scripts/patch-npu-fdk.py" .
+        run: |
+          # SDK compiles with -Werror; the FDK tree has ~10 sites where a
+          # volatile uint8_t* is passed to __builtin_assume_aligned() (which
+          # takes const void*). These are benign qualifier-discard warnings,
+          # not bugs — drop -Werror so the build can proceed.
+          sed -i 's/"-Werror",//g' airoha-npu-fdk-build
+          python3 "$GITHUB_WORKSPACE/.github/scripts/patch-npu-fdk.py" .
+          grep -c Werror airoha-npu-fdk-build || true
 
       - name: Build NPU firmware
         working-directory: airoha-npu-fdk
