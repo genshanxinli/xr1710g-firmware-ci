@@ -465,15 +465,12 @@
 	pinctrl-0 = <&hsuart_pins>;
 };
 
-/* NPU firmware (20260622-r2) does not implement the WLAN_FUNC_GET_WAIT_
- * RXDESC_BASE command expected by the b2704cf mt76 NPU offload data path
- * (firmware replies 0x00000000, fw version 0.0). The misbehaving firmware
- * performs host-memory DMA at wrong targets and corrupts the kernel text
- * region (pstore: 0x7fffffc080xxxxxx 32-bit overwrite pattern), causing
- * panics even when the driver side is hardened. Disable the NPU node so
- * the firmware is never loaded/run; WiFi continues on the CPU data path.
- * Re-enable once a matching NPU firmware is available upstream.
+/* NPU: enabled via &npu above (firmware-name + status okay).
+ * Historically disabled because the linux-firmware 20260622-r2 blob does not
+ * implement WLAN_FUNC_GET_WAIT_RXDESC_BASE (replies 0x0, fw version 0.0) and
+ * the misbehaving firmware DMA-corrupts host memory. Since 2026-08-08 we ship
+ * a self-built firmware from the Airoha NPU FDK source SDK
+ * (github.com/hurryman2212/airoha-npu-fdk, fw version 7.7) that implements
+ * the full command set; the driver-side fail-safe (0022/0039/0040: ring-base
+ * validation + RX length guards) remains in place as a safety net.
  */
-&npu {
-	status = "disabled";
-};
