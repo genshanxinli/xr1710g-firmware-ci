@@ -19,7 +19,7 @@ Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
 
 --- a/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
 +++ b/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
-@@ -85,6 +85,13 @@
+@@ -85,8 +85,17 @@
  #define MCUCFG_CK_SEL_MASK		GENMASK(10, 9)
  #define MCUCFG_CK_SEL_ARMPLL		1
  #define MCUCFG_CK_SEL_PLL2		3
@@ -37,7 +37,7 @@ Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
  	struct clk_hw hw;
  	struct generic_pm_domain pd;
  	bool use_smc;
-@@ -210,6 +217,40 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
+@@ -210,7 +217,50 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
  	return 0;
  }
  
@@ -88,20 +88,18 @@ Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
  		struct generic_pm_domain *domain, unsigned int state)
  {
  	struct airoha_cpu_pmdomain_priv *priv =
-@@ -262,7 +305,7 @@ static int airoha_cpu_pmdomain_set_performance_state(
+@@ -215,6 +215,8 @@ static int airoha_cpu_pmdomain_set_performance_state(
  	if (priv->use_smc)
- 		err = airoha_cpu_smc_set_freq(priv, state);
- 	else
- 		err = airoha_cpu_pll_set_freq(priv, state);
+ 		return airoha_cpu_smc_set_freq(state);
  
 +	airoha_cpu_avs_voltage(priv, 700 + state * 50);
 +
- 	return err;
+ 	return airoha_cpu_pll_set_freq(priv, state);
  }
+
 --- a/target/linux/airoha/dts/an7581.dtsi
 +++ b/target/linux/airoha/dts/an7581.dtsi
-@@ -180,7 +180,7 @@
- 
+@@ -166,6 +166,6 @@
  	cpufreq: cpufreq {
 -		reg = <0x0 0x1fa20000 0x0 0x2c0>, <0x0 0x1efbe000 0x0 0x800>;
 +		reg = <0x0 0x1fa20000 0x0 0x300>, <0x0 0x1efbe000 0x0 0x800>;
