@@ -28,14 +28,28 @@ set -euo pipefail
 CLONE="${1:?Usage: freeze-source-mtimes.sh <openwrt-clone>}"
 FREEZE_EPOCH="${FREEZE_EPOCH:-1786062016}"
 
-# find_md5 inputs (include/depends.mk / include/kernel-build.mk):
-#   ${CURDIR}        -> package/ feeds/ (real files behind package/feeds symlinks)
-#   KERNEL_FILE_DEPENDS -> target/linux (patches/files dirs)
-#   tools/*          -> host tools use ${CURDIR} too (host-build.mk)
-# .config is deliberately NOT frozen: its mtime must stay NEWER than the
-# stamps so make keeps seeing an up-to-date config (confvar guards the
-# content side). Everything else make compares is inside the cached trees.
-find "$CLONE"/package "$CLONE"/feeds "$CLONE"/tools "$CLONE"/target \
+# The ENTIRE source tree is frozen, not just the find_md5 inputs:
+#   find_md5 inputs: package/ feeds/ tools/ target/ (${CURDIR} +
+#                    KERNEL_FILE_DEPENDS, incl. kernel patches/files)
+#   Top-level Makefile:81 `$(BUILD_DIR)/.prepared: Makefile` re-touches
+#                    staging_dir/target-*/.prepared (a prerequisite of
+#                    EVERY package compile, package/Makefile:83) whenever
+#                    the top Makefile is newer — a freshly cloned tree
+#                    always is, so every warm build re-ran every package's
+#                    prepare->configure->built chain despite matching
+#                    stamp NAMES.
+# .config gets frozen too — safe: STAMP_CONFIGURED embeds confvar (a
+# content hash, not mtime), and the kernel's STAMP_CONFIGURED has FORCE
+# anyway. Excluded dirs (caches/build outputs) are normalized to the same
+# epoch by builddir-cache.sh normalize_mtimes; tmp/ is regenerated each
+# build (prepare-tmpinfo) and must stay current.
+find "$CLONE" \
+  -path "$CLONE/.git" -prune -o \
+  -path "$CLONE/build_dir" -prune -o \
+  -path "$CLONE/staging_dir" -prune -o \
+  -path "$CLONE/dl" -prune -o \
+  -path "$CLONE/.ccache" -prune -o \
+  -path "$CLONE/tmp" -prune -o \
   -type f -exec touch -d "@$FREEZE_EPOCH" {} + 2>/dev/null || true
 
-echo "freeze-source-mtimes: frozen package/ feeds/ tools/ target/ to epoch $FREEZE_EPOCH"
+echo "freeze-source-mtimes: frozen source tree to epoch $FREEZE_EPOCH (excluding caches/build dirs)"
