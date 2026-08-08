@@ -10,6 +10,9 @@ jobs:
   build-npu-fw:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Install LLVM toolchain
         run: |
           sudo apt-get update -qq
