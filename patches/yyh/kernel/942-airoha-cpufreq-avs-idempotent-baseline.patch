@@ -20,11 +20,12 @@ Fix:
   frequency, lower frequency before lowering voltage (never high-freq +
   low-voltage; transient over-voltage on downgrade is safe).
 
-Applies after 941 (same file airoha-cpu-pmdomain.c).
+Applies after 941 (same file airoha-cpu-pmdomain.c). Line numbers match
+the OpenWrt kernel baseline that 941 anchors to.
 
 --- a/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
 +++ b/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
-@@ -40,6 +40,10 @@ struct airoha_cpu_pmdomain_priv {
+@@ -48,6 +48,10 @@ struct airoha_cpu_pmdomain_priv {
  	struct clk_hw hw;
  	struct generic_pm_domain pd;
  	bool use_smc;
@@ -35,9 +36,8 @@ Applies after 941 (same file airoha-cpu-pmdomain.c).
  	/* Direct PLL registers (used when use_smc = false) */
  	void __iomem *pll_base;
  	void __iomem *mcucfg;
-@@ -217,50 +217,70 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
- 	return 0;
- }
+@@ -217,44 +217,66 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
+ 	}
  
 -/*
 - * XR1710G: BL31 has no AVS SMC handler, so the direct-PLL path never
@@ -87,7 +87,9 @@ Applies after 941 (same file airoha-cpu-pmdomain.c).
 + * (500-1200 MHz) and panic without a voltage boost (bit63-flip IABT).
 + * Raise Vcore before switching to such OPPs by lowering the AVS DAC.
 + * Idempotent: boost target is anchored to the once-per-boot baseline,
-+ * downgrades restore the baseline exactly (no ratchet).
++ * downgrades restore the baseline exactly (no ratchet), and
++ * RG_AVS_OUT_EN bit0 is verified once so a stuck-0 cannot silently
++ * neutralize the boost.
 + */
 +static void airoha_cpu_avs_voltage(struct airoha_cpu_pmdomain_priv *priv,
 +				   unsigned int freq_mhz)
@@ -160,7 +162,7 @@ Applies after 941 (same file airoha-cpu-pmdomain.c).
  {
  	struct airoha_cpu_pmdomain_priv *priv =
  		container_of(domain, struct airoha_cpu_pmdomain_priv, pd);
-+	unsigned int freq_mhz = 700 + state * 50;
++	unsigned int freq_mhz;
 +	int ret;
  
  	if (priv->use_smc)
@@ -169,8 +171,7 @@ Applies after 941 (same file airoha-cpu-pmdomain.c).
 -	airoha_cpu_avs_voltage(priv, 700 + state * 50);
 -
 -	return airoha_cpu_pll_set_freq(priv, state);
-+	/* Raise before raising frequency; lower frequency before lowering
-+	 * voltage. Never a high-freq + low-voltage instant. */
++	freq_mhz = 700 + state * 50;
 +	if (freq_mhz >= priv->last_freq_mhz) {
 +		airoha_cpu_avs_voltage(priv, freq_mhz);
 +		ret = airoha_cpu_pll_set_freq(priv, state);
