@@ -236,6 +236,16 @@ jobs:
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
 
+      - name: Run patch preflight
+        # Runs on the COLD tree, BEFORE the build-dir restore: its prepare
+        # targets re-extract + re-patch every package dir (STAMP_PREPARED
+        # recipe starts with `rm -rf $(PKG_BUILD_DIR)`), which would destroy
+        # a freshly restored cache tree. The restore below overwrites these
+        # preflight dirs with the validated snapshot.
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
+            ${{ env.BUILD_DIR }} --mode=prepare --skip-apply
+
       - name: Restore kernel build-dir cache
         id: cache-tb
         if: env.USE_BUILD_DIR_CACHE == 'true'
@@ -306,32 +316,6 @@ jobs:
             ${{ env.BUILD_DIR }}/build_dir/host
             ${{ env.BUILD_DIR }}/build_dir/toolchain-*
           key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
-
-      - name: Diagnose stamps (pre-preflight, TEMP)
-        if: env.USE_BUILD_DIR_CACHE == 'true'
-        run: |
-          cd ${{ env.BUILD_DIR }}
-          echo "=== openssl stamps ==="
-          ls -la build_dir/target-*/openssl-3.5.7/.configured* build_dir/target-*/openssl-3.5.7/.prepared* build_dir/target-*/openssl-3.5.7/.built 2>/dev/null | head
-          echo "=== make -d dry-run (stale prereqs) ==="
-          make -d package/feeds/packages/openssl/compile -n 2>&1 | grep -E "Must remake|is newer than|up to date|Considering target" | head -30 || true
-
-      - name: Diagnose stamps (post-preflight, TEMP)
-        if: env.USE_BUILD_DIR_CACHE == 'true'
-        run: |
-          cd ${{ env.BUILD_DIR }}
-          echo "=== openssl stamps (after preflight) ==="
-          ls -la build_dir/target-*/openssl-3.5.7/.configured* build_dir/target-*/openssl-3.5.7/.prepared* build_dir/target-*/openssl-3.5.7/.built 2>/dev/null | head
-          echo "=== source/staging mtimes ==="
-          stat -c '%y %n' package/feeds/packages/openssl/Makefile 2>/dev/null
-          stat -c '%y %n' staging_dir/target-aarch64_cortex-a53_musl/.prepared 2>/dev/null
-          echo "=== make -d dry-run after preflight ==="
-          make -d package/feeds/packages/openssl/compile -n 2>&1 | grep -E "Must remake|is newer than|up to date|Considering target" | head -30 || true
-
-      - name: Run patch preflight
-        run: |
-          bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
-            ${{ env.BUILD_DIR }} --mode=prepare --skip-apply
 
       - name: Full firmware build
         run: |
