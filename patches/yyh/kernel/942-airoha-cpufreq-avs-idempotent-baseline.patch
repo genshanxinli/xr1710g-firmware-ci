@@ -20,12 +20,14 @@ Fix:
   frequency, lower frequency before lowering voltage (never high-freq +
   low-voltage; transient over-voltage on downgrade is safe).
 
-Applies after 941 (same file airoha-cpu-pmdomain.c). Line numbers match
-the OpenWrt kernel baseline that 941 anchors to.
+Applies after 941 (same file airoha-cpu-pmdomain.c). Generated with
+difflib against the post-941 tree; line numbers anchored to the OpenWrt
+kernel baseline (offset -6 vs pristine 6.18.42, matching 941's hunks).
 
 --- a/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
 +++ b/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
-@@ -48,6 +48,10 @@ struct airoha_cpu_pmdomain_priv {
+@@ -49,7 +49,11 @@
+ 
  	struct clk_hw hw;
  	struct generic_pm_domain pd;
  	bool use_smc;
@@ -36,80 +38,23 @@ the OpenWrt kernel baseline that 941 anchors to.
  	/* Direct PLL registers (used when use_smc = false) */
  	void __iomem *pll_base;
  	void __iomem *mcucfg;
-@@ -217,44 +217,66 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
- 	}
+@@ -220,7 +224,11 @@
  
--/*
-- * XR1710G: BL31 has no AVS SMC handler, so the direct-PLL path never
-- * adjusts Vcore.  High OPPs (>= 1300 MHz) exceed the ATF design point
-- * (500-1200 MHz) and panic without a voltage boost (bit63-flip IABT).
-- * Raise Vcore before switching to such OPPs by lowering the AVS DAC.
-- */
--static void airoha_cpu_avs_voltage(struct airoha_cpu_pmdomain_priv *priv,
--				   unsigned int freq_mhz)
--{
--	void __iomem *base = priv->pll_base;
--	unsigned long flags;
--	u32 val, dac, target, delta_lsb = 0;
--
--	if (freq_mhz >= 1400)
--		delta_lsb = 29;	/* ~ +40 mV */
--	else if (freq_mhz >= 1300)
--		delta_lsb = 21;	/* ~ +30 mV */
--
--	local_irq_save(flags);
--
--	/* Unlock PLL/AVS registers */
--	val = readl(base + PLLRG_PROTECT);
--	writel((val & ~PLLRG_PROTECT_MASK) | PLLRG_PROTECT_KEY,
--	       base + PLLRG_PROTECT);
--
--	dac = readl(base + CPUPLL_AVS_DAC) & CPUPLL_AVS_DAC_MASK;
--	if (delta_lsb) {
--		target = dac - delta_lsb;
--		if (target < CPUPLL_AVS_DAC_MIN)
--			target = CPUPLL_AVS_DAC_MIN;
--		/* write new DAC value and toggle CHG to latch it */
--		writel(target | CPUPLL_AVS_DAC_CHG, base + CPUPLL_AVS_DAC);
--		writel(target, base + CPUPLL_AVS_DAC);
--		udelay(10);
--	}
--
--	/* Re-lock registers */
--	val = readl(base + PLLRG_PROTECT);
--	writel(val & ~PLLRG_PROTECT_MASK, base + PLLRG_PROTECT);
--
--	local_irq_restore(flags);
--}
-+/*
-+ * XR1710G: BL31 has no AVS SMC handler, so the direct-PLL path never
-+ * adjusts Vcore.  High OPPs (>= 1300 MHz) exceed the ATF design point
-+ * (500-1200 MHz) and panic without a voltage boost (bit63-flip IABT).
-+ * Raise Vcore before switching to such OPPs by lowering the AVS DAC.
+  * adjusts Vcore.  High OPPs (>= 1300 MHz) exceed the ATF design point
+  * (500-1200 MHz) and panic without a voltage boost (bit63-flip IABT).
+  * Raise Vcore before switching to such OPPs by lowering the AVS DAC.
 + * Idempotent: boost target is anchored to the once-per-boot baseline,
 + * downgrades restore the baseline exactly (no ratchet), and
 + * RG_AVS_OUT_EN bit0 is verified once so a stuck-0 cannot silently
 + * neutralize the boost.
-+ */
-+static void airoha_cpu_avs_voltage(struct airoha_cpu_pmdomain_priv *priv,
-+				   unsigned int freq_mhz)
-+{
-+	void __iomem *base = priv->pll_base;
-+	unsigned long flags;
-+	u32 val, dac, target, delta_lsb = 0;
-+
-+	if (freq_mhz >= 1400)
-+		delta_lsb = 29;	/* ~ +40 mV */
-+	else if (freq_mhz >= 1300)
-+		delta_lsb = 21;	/* ~ +30 mV */
-+
-+	local_irq_save(flags);
-+
-+	/* Unlock PLL/AVS registers */
-+	val = readl(base + PLLRG_PROTECT);
-+	writel((val & ~PLLRG_PROTECT_MASK) | PLLRG_PROTECT_KEY,
-+	       base + PLLRG_PROTECT);
-+
+  */
+ static void airoha_cpu_avs_voltage(struct airoha_cpu_pmdomain_priv *priv,
+ 				   unsigned int freq_mhz)
+@@ -240,12 +248,41 @@
+ 
+ 	writel((val & ~PLLRG_PROTECT_MASK) | PLLRG_PROTECT_KEY,
+ 	       base + PLLRG_PROTECT);
+ 
 +	/* 1) RG_AVS_OUT_EN bit0: verify/raise once; if stuck 0 all DAC
 +	 * writes are silent no-ops and the boost never takes effect. */
 +	if (!priv->avs_out_en_ok) {
@@ -142,23 +87,17 @@ the OpenWrt kernel baseline that 941 anchors to.
 +	else
 +		target = priv->dac_baseline;
 +
-+	dac = readl(base + CPUPLL_AVS_DAC) & CPUPLL_AVS_DAC_MASK;
+ 	dac = readl(base + CPUPLL_AVS_DAC) & CPUPLL_AVS_DAC_MASK;
+-	if (delta_lsb) {
+-		target = dac - delta_lsb;
+-		if (target < CPUPLL_AVS_DAC_MIN)
+-			target = CPUPLL_AVS_DAC_MIN;
 +	if (dac != target) {
-+		/* write new DAC value and toggle CHG to latch it */
-+		writel(target | CPUPLL_AVS_DAC_CHG, base + CPUPLL_AVS_DAC);
-+		writel(target, base + CPUPLL_AVS_DAC);
-+		udelay(10);
-+	}
-+
-+	/* Re-lock registers */
-+	val = readl(base + PLLRG_PROTECT);
-+	writel(val & ~PLLRG_PROTECT_MASK, base + PLLRG_PROTECT);
-+
-+	local_irq_restore(flags);
-+}
+ 		/* write new DAC value and toggle CHG to latch it */
+ 		writel(target | CPUPLL_AVS_DAC_CHG, base + CPUPLL_AVS_DAC);
+ 		writel(target, base + CPUPLL_AVS_DAC);
+@@ -263,14 +300,24 @@
  
- static int airoha_cpu_pmdomain_set_performance_state(
- 		struct generic_pm_domain *domain, unsigned int state)
  {
  	struct airoha_cpu_pmdomain_priv *priv =
  		container_of(domain, struct airoha_cpu_pmdomain_priv, pd);
@@ -184,5 +123,6 @@ the OpenWrt kernel baseline that 941 anchors to.
 +	return ret;
  }
  
+ static bool airoha_cpu_smc_available(void)
 -- 
 2.43.0
