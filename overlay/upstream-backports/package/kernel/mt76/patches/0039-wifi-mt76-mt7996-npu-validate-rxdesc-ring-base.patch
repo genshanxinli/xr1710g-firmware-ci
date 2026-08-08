@@ -14,17 +14,20 @@ and inside one of the two legal windows:
   * the XR1710G (AN7581) NPU reserved DRAM [0x8a000000, 0x90e06800)
     (npu-pkt / npu-txpkt / npu-txbufid / npu-ba, all nomap reserved
     memory, so DMA there can never corrupt the kernel);
-  * the NPU local SRAM [0x1e800000, 0x1e900000) — the self-built FDK
+  * the NPU local SRAM [0x1e800000, 0x1e900000) -- the self-built FDK
     firmware (airoha-npu-fdk, v7.7) hosts its RX descriptor rings in
     NPU-attached SRAM (region base 0x3e817000, published masked to the
-    30-bit view 0x1e8xxxxx), which the MT7996 WFDMA can reach via the
-    SoC interconnect. All other replies (kernel text/RAM, qdma buffers)
+    30-bit view 0x1e8xxxxx), reachable by the MT7996 WFDMA via the SoC
+    interconnect. All other replies (kernel text/RAM, qdma buffers)
     fail NPU init instead of programming the register; the caller then
     tears the NPU data path down and runs the CPU path.
 
 The window constants are board specific; they mirror the DT
 reserved-memory layout of an7581-xr1710g-ubi.dts and the FDK firmware
 memory map, and should be derived from DT if this is ever upstreamed.
+
+Applies after 0022 (which adds mt7996_npu_check_ring_base); do not
+re-define the function here.
 
 --- a/mt7996/npu.c
 +++ b/mt7996/npu.c
