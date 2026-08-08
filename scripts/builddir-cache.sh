@@ -120,8 +120,13 @@ normalize_mtimes() {
   local clone="$1"
   local epoch="${FREEZE_EPOCH:-1786062016}"
   echo "builddir-cache: normalizing restored tree mtimes to epoch $epoch (stamps become authoritative)"
+  # dl/ is included: $(STAMP_PREPARED): $(DL_DIR)/$(FILE) (download.mk
+  # DOWNLOAD_RDEP) makes every package's prepare stamp depend on its
+  # tarball — a restored dl cache carries save-time mtimes (later than
+  # the frozen source tree), so every package re-extracts (observed:
+  # warm run still rebuilt 85 pkgs with perfectly matching stamp names).
   find "$clone"/build_dir/target-* "$clone"/staging_dir/target-* \
-       "$clone"/build_dir/host "$clone"/staging_dir/host \
+       "$clone"/build_dir/host "$clone"/staging_dir/host "$clone"/dl \
     -exec touch -d "@$epoch" {} + 2>/dev/null || true
 }
 

@@ -212,12 +212,24 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Compute dl cache key
+        # Content-hashed dl key: tarballs restored from an old cache entry
+        # can be incomplete (observed: 29 tarballs re-downloaded every run
+        # because cache-hit=true skipped the save forever), and STAMP_PREPARED
+        # depends on $(DL_DIR)/$(FILE). A content-hash key lets a run that
+        # filled gaps save a NEW entry instead of being refused by
+        # actions/cache (which never overwrites an existing key).
+        id: dl-key
+        if: success()
+        run: |
+          echo "dl_hash=$(bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh dl-hash ${{ env.BUILD_DIR }}/dl)" >> "$GITHUB_OUTPUT"
+
       - name: Save dl cache
-        if: success() && steps.cache-dl.outputs.cache-hit != 'true' && steps.check-dl.outputs.exists == 'true'
+        if: success() && steps.check-dl.outputs.exists == 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BUILD_DIR }}/dl
-          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.dl-key.outputs.dl_hash }}
 
       - name: Freeze source tree mtimes
         # STAMP_PREPARED embeds find_md5, which hashes "%p%T@\n" — file
