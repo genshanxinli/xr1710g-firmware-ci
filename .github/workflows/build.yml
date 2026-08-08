@@ -329,13 +329,18 @@ jobs:
         if: env.USE_BUILD_DIR_CACHE == 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
-          echo "=== top-level Makefile / staging .prepared / attr stamp mtimes ==="
-          stat -c '%Y %y %n' Makefile staging_dir/target-*/.prepared \
-            build_dir/target-*/attr-2.5.2/.prepared* 2>/dev/null | head -8
-          echo "=== make -d decision for openssl compile ==="
+          echo "=== .config content hash ==="
+          sha256sum .config | cut -c1-16
+          grep -c "CONFIG_HAVE_DOT_CONFIG" .config || true
+          echo "=== openssl stamp chain mtimes ==="
+          ls -la --time-style=+%s build_dir/target-*/openssl-3.5.7/.prepared* \
+            build_dir/target-*/openssl-3.5.7/.configured* \
+            build_dir/target-*/openssl-3.5.7/.built 2>/dev/null
+          stat -c '%Y %n' staging_dir/target-*/pkginfo/*.version 2>/dev/null | head -5
+          echo "=== make -d FULL openssl compile chain ==="
           make -d package/feeds/packages/openssl/compile -n 2>&1 \
-            | grep -E "Must remake|newer than|is up to date|Considering target file 'package/feeds/packages/openssl|Prerequisite" \
-            | head -30 || true
+            | grep -E "Must remake|newer than|does not exist|is up to date|openssl-3.5.7" \
+            | head -50 || true
 
       - name: Check toolchain cache
         id: check-tc
