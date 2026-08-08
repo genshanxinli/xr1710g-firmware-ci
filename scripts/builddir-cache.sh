@@ -116,9 +116,11 @@ validate() {
 
 kernel_fingerprint() {
   local itb="${1:?kernel-fingerprint <itb> <full-hash> <base-sha>}"
-  local fhash="${2:?}" base="${3:-}" cur_sha prev_file art_id prev_sha prev_hash prev_base repo
+  local fhash="${2:?}" base="${3:-}" cur_sha prev_file art_id prev_sha prev_hash prev_base repo py
   repo="${GITHUB_REPOSITORY:-}"
-  cur_out="$(python3 - "$itb" <<'PYEOF'
+  py="$(command -v python3 2>/dev/null || command -v python 2>/dev/null)"
+  [ -n "$py" ] || { echo "kernel-fingerprint: no python interpreter — canary skipped"; return 0; }
+  cur_out="$("$py" - "$itb" <<'PYEOF'
 import struct, sys
 path = sys.argv[1]
 data = open(path, 'rb').read()
@@ -151,14 +153,23 @@ def u32(key):
     v = props.get(key)
     return struct.unpack('>I', v[:4])[0] if v and len(v) >= 4 else None
 
-node = ('', 'images', 'kernel-1')
-pos, size = u32(node + ('data-position',)), u32(node + ('data-size',))
-if pos is None or size is None:
+# Locate the kernel-1 image node dynamically (the FIT root may carry an
+# extra unnamed node level, so a hardcoded path is fragile).
+node = None
+for k in props:
+    if k[-1] == 'data-position' and 'kernel-1' in k:
+        node = k[:-1]
+        break
+if node is None:
     sys.exit('kernel-1 sub-image not found in FIT')
+pos, size = u32(node + ('data-position',)), u32(node + ('data-size',))
 import hashlib
 print(hashlib.sha256(data[pos:pos+size]).hexdigest())
 PYEOF
 )"
+  # cur_out holds the python output (kernel-1 sub-image sha256, no trailing
+  # newline after stripping).
+  cur_sha="$(printf '%s' "$cur_out")"
   echo "kernel_sha256=$cur_sha" > /tmp/kernel-fingerprint.txt
   echo "full_hash=$fhash" >> /tmp/kernel-fingerprint.txt
   echo "base=$base" >> /tmp/kernel-fingerprint.txt
