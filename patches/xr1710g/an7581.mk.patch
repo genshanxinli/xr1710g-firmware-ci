@@ -37,6 +37,7 @@ index 2095d8a..c0ed58c 100644
 +		    apk-mbedtls ethtool-full fitblk \
 +		    kmod-i2c-an7581 kmod-hwmon-nct7802 \
 +		    kmod-mt7996-firmware kmod-phy-realtek rtl826x-firmware \
++		    xr1710g-mt7996-fw \
 +		    luci \
 +		    luci-app-firewall luci-app-mlo \
 +		    luci-app-package-manager \
