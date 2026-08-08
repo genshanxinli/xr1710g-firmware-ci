@@ -38,7 +38,7 @@ env:
   CI_REPO: ci-repo
   GLASS_REPO: rchen14b/luci-theme-glass
   GLASS_REF: v1.1.6
-  CCACHE_MAXSIZE: 6G
+  CCACHE_MAXSIZE: 4G
   CCACHE_COMPRESS: "1"
 
 jobs:
@@ -72,11 +72,23 @@ jobs:
   baseline-prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    # actions:write for cache save/delete; an explicit permissions block
+    # resets unlisted scopes to none, so contents:read must be listed too.
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
         with:
           path: ci-repo
+      - name: Compute CI content hash
+        id: ci-hash
+        run: |
+          echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
       - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
@@ -97,8 +109,12 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: feeds-fanboy-
+          # Date-suffixed to match build.yml: an exact hit only skips the
+          # feeds update for same-day runs, keeping the snapshot fresh.
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
+          restore-keys: |
+            feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            feeds-fanboy-
       - name: Restore toolchain cache
         id: cache-tc
         uses: actions/cache/restore@v4
@@ -114,8 +130,10 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: ccache-fanboy-
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
+          restore-keys: |
+            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            ccache-fanboy-
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -124,8 +142,12 @@ jobs:
             unzip file rsync git subversion swig ecj libtool-bin autoconf automake
       - name: Set up validation tree
         run: |
+          FEEDS_FLAG=""
+          if [ "${{ steps.cache-feeds.outputs.cache-hit }}" = "true" ]; then
+            FEEDS_FLAG="--skip-feeds-update"
+          fi
           bash ${{ env.CI_REPO }}/scripts/setup-validate-tree.sh \
-            --existing ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
+            --existing $FEEDS_FLAG ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
       - name: Download sources
         run: |
           cd ${{ env.BUILD_DIR }}
@@ -156,6 +178,28 @@ jobs:
         run: |
           bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
             ${{ env.BUILD_DIR }} --mode=${{ inputs.mode || 'prepare' }} --skip-apply
+      - name: Check ccache cache
+        id: check-ccache
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/.ccache" ] && [ -n "$(find "${{ env.BUILD_DIR }}/.ccache" -mindepth 1 -print -quit)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save ccache
+        continue-on-error: true
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true' && steps.check-ccache.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
+      - name: Prune stale caches
+        if: always()
+        continue-on-error: true
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/prune-caches.sh
       - name: Upload preflight report
         if: always()
         uses: actions/upload-artifact@v4
@@ -173,11 +217,21 @@ jobs:
     needs: changes
     continue-on-error: true
     timeout-minutes: 180
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
         with:
           path: ci-repo
+      - name: Compute CI content hash
+        id: ci-hash
+        run: |
+          echo "ci_hash=$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh ${{ env.CI_REPO }})" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y%m%d)" >> $GITHUB_OUTPUT
       - name: Clone locked fanboy ubi2-oc base
         id: clone
         run: |
@@ -187,17 +241,23 @@ jobs:
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/dl ${{ env.BUILD_DIR }}/feeds ${{ env.BUILD_DIR }}/.ccache
       - name: Restore dl cache
+        id: cache-dl
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/dl
           key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: dl-fanboy-
       - name: Restore feeds cache
+        id: cache-feeds
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/feeds
-          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: feeds-fanboy-
+          # Date-suffixed to match build.yml: an exact hit only skips the
+          # feeds update for same-day runs, keeping the snapshot fresh.
+          key: feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.build_date }}
+          restore-keys: |
+            feeds-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            feeds-fanboy-
       - name: Restore toolchain cache
         id: cache-tc
         uses: actions/cache/restore@v4
@@ -209,11 +269,14 @@ jobs:
           key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
           restore-keys: toolchain-fanboy-
       - name: Restore ccache
+        id: cache-ccache
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BUILD_DIR }}/.ccache
-          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}
-          restore-keys: ccache-fanboy-
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
+          restore-keys: |
+            ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-
+            ccache-fanboy-
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
@@ -222,8 +285,12 @@ jobs:
             unzip file rsync git subversion swig ecj libtool-bin autoconf automake
       - name: Set up validation tree
         run: |
+          FEEDS_FLAG=""
+          if [ "${{ steps.cache-feeds.outputs.cache-hit }}" = "true" ]; then
+            FEEDS_FLAG="--skip-feeds-update"
+          fi
           bash ${{ env.CI_REPO }}/scripts/setup-validate-tree.sh \
-            --existing ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
+            --existing $FEEDS_FLAG ${{ env.BUILD_DIR }} ${{ env.CI_REPO }}
       - name: Download sources
         run: |
           cd ${{ env.BUILD_DIR }}
@@ -259,6 +326,23 @@ jobs:
           bash ${{ env.CI_REPO }}/scripts/preflight-validate.sh \
             ${{ env.BUILD_DIR }} --mode=${{ inputs.mode || 'prepare' }} --skip-apply \
             --report=${{ env.CI_REPO }}/docs/candidate-preflight-report.md
+      - name: Check ccache cache
+        id: check-ccache
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true'
+        run: |
+          set +e
+          if [ -d "${{ env.BUILD_DIR }}/.ccache" ] && [ -n "$(find "${{ env.BUILD_DIR }}/.ccache" -mindepth 1 -print -quit)" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save ccache
+        continue-on-error: true
+        if: success() && steps.cache-ccache.outputs.cache-hit != 'true' && steps.check-ccache.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/.ccache
+          key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
       - name: Upload candidate report
         if: always()
         uses: actions/upload-artifact@v4

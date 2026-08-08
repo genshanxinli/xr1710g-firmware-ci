@@ -6,18 +6,32 @@ on:
   workflow_dispatch:
 
 permissions:
+  # actions:read is required for the cache restores below; with an
+  # explicit permissions block, unlisted scopes default to none.
+  actions: read
   contents: write
   pull-requests: write
   issues: write
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    # Pinned to the same image build.yml uses: on a cache hit the restored
+    # host toolchain was built on ubuntu-24.04, and ubuntu-latest would
+    # silently drift to newer images.
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
+
+      - name: Set sync tree path
+        # Tree lives under the workspace with the SAME relative paths as
+        # build.yml (openwrt/staging_dir, ...). actions/cache versions
+        # entries by the resolved absolute path list, so a $RUNNER_TEMP
+        # tree would never match build.yml's cache entries.
+        run: |
+          echo "SYNC_TREE=$GITHUB_WORKSPACE/openwrt" >> "$GITHUB_ENV"
 
       - name: Check upstream SHAs
         id: check
@@ -28,13 +42,53 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Clone locked fanboy base into sync tree
+        id: clone
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p ${{ env.SYNC_TREE }}
+          bash scripts/clone-base.sh ${{ env.SYNC_TREE }}
+          echo "upstream_commit=$(git -C ${{ env.SYNC_TREE }} rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Prepare sync tree cache paths
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p ${{ env.SYNC_TREE }}/dl \
+            ${{ env.SYNC_TREE }}/staging_dir \
+            ${{ env.SYNC_TREE }}/build_dir/host
+
+      - name: Restore dl cache
+        id: cache-dl
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.SYNC_TREE }}/dl
+          key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: dl-fanboy-
+
+      - name: Restore toolchain cache
+        id: cache-tc
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.SYNC_TREE }}/staging_dir
+            ${{ env.SYNC_TREE }}/build_dir/host
+            ${{ env.SYNC_TREE }}/build_dir/toolchain-*
+          key: toolchain-fanboy-${{ steps.clone.outputs.upstream_commit }}
+          restore-keys: toolchain-fanboy-
+
       - name: Refresh overlays and validate
         id: refresh
         if: steps.check.outputs.changed == 'true'
         continue-on-error: true
         run: |
           bash scripts/refresh-upstream.sh
-          bash scripts/validate-overlay.sh
+          FLAGS="--tree-dir=${{ env.SYNC_TREE }}"
+          if [ "${{ steps.cache-tc.outputs.cache-hit }}" = "true" ]; then
+            FLAGS="$FLAGS --toolchain-cached"
+          fi
+          bash scripts/validate-overlay.sh $FLAGS
 
       - name: Create conflict issue
         if: steps.check.outputs.changed == 'true' && steps.refresh.outcome == 'failure'
