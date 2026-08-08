@@ -1,0 +1,113 @@
+From: genshanxinli <genshanxinli@users.noreply.github.com>
+Subject: [PATCH] airoha: cpufreq: raise Vcore via AVS DAC before high OPPs (1400MHz fix)
+
+XR1710G BL31 lacks the AVS SMC service, so airoha-cpu-pmdomain falls back
+to direct PLL programming (see 940 patch) which only changes the PLL
+frequency and NEVER touches the core voltage.  Running 1400 MHz at the
+1200 MHz-class Vcore violates the A53 setup/hold margins: execution flow
+randomly corrupts (bit63-flip IABT: pc == 0x7fffffc0... instead of
+0xffffffc0...) and the box panics within minutes (8.6 min observed).
+
+Fix: before switching to an OPP above the ATF design point (1200 MHz),
+raise Vcore by lowering the AVS DAC value (Vcore = Vupper - VDAC, so a
+smaller DAC value means a higher voltage; ~1.40 mV/LSB).  The AVS DAC
+registers live in the chip-SCU region at 0x1fa202e0 (RG_DATA_AVS_DAC,
+bit16 = CHG) / 0x1fa202a0 (RG_AVS_OUT_EN), guarded by the same
+PLLRG_PROTECT key (0x12) already used by the PLL path.
+
+Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
+
+--- a/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
++++ b/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
+@@ -85,6 +85,13 @@
+ #define MCUCFG_CK_SEL_MASK		GENMASK(10, 9)
+ #define MCUCFG_CK_SEL_ARMPLL		1
+ #define MCUCFG_CK_SEL_PLL2		3
+ 
++/* AVS DAC voltage control (chip-SCU region; guarded by PLLRG_PROTECT) */
++#define CPUPLL_AVS_OUT_EN		0x2a0
++#define CPUPLL_AVS_DAC			0x2e0
++#define CPUPLL_AVS_DAC_CHG		BIT(16)
++#define CPUPLL_AVS_DAC_MASK		GENMASK(9, 0)
++#define CPUPLL_AVS_DAC_STEP_MV		140	/* 0.01 mV per LSB */
++#define CPUPLL_AVS_DAC_MIN		0x80
++#define CPUPLL_AVS_DAC_MAX		0x350
++
+ struct airoha_cpu_pmdomain_priv {
+ 	struct clk_hw hw;
+ 	struct generic_pm_domain pd;
+ 	bool use_smc;
+@@ -210,6 +217,40 @@ static int airoha_cpu_pll_set_freq(struct airoha_cpu_pmdomain_priv *priv,
+ 	return 0;
+ }
+ 
++/*
++ * XR1710G: BL31 has no AVS SMC handler, so the direct-PLL path never
++ * adjusts Vcore.  High OPPs (>= 1300 MHz) exceed the ATF design point
++ * (500-1200 MHz) and panic without a voltage boost (bit63-flip IABT).
++ * Raise Vcore before switching to such OPPs by lowering the AVS DAC.
++ */
++static void airoha_cpu_avs_voltage(struct airoha_cpu_pmdomain_priv *priv,
++				   unsigned int freq_mhz)
++{
++	void __iomem *base = priv->pll_base;
++	unsigned long flags;
++	u32 val, dac, target, delta_lsb = 0;
++
++	if (freq_mhz >= 1400)
++		delta_lsb = 29;	/* ~ +40 mV */
++	else if (freq_mhz >= 1300)
++		delta_lsb = 21;	/* ~ +30 mV */
++
++	local_irq_save(flags);
++
++	/* Unlock PLL/AVS registers */
++	val = readl(base + PLLRG_PROTECT);
++	writel((val & ~PLLRG_PROTECT_MASK) | PLLRG_PROTECT_KEY,
++	       base + PLLRG_PROTECT);
++
++	dac = readl(base + CPUPLL_AVS_DAC) & CPUPLL_AVS_DAC_MASK;
++	if (delta_lsb) {
++		target = dac - delta_lsb;
++		if (target < CPUPLL_AVS_DAC_MIN)
++			target = CPUPLL_AVS_DAC_MIN;
++		/* write new DAC value and toggle CHG to latch it */
++		writel(target | CPUPLL_AVS_DAC_CHG, base + CPUPLL_AVS_DAC);
++		writel(target, base + CPUPLL_AVS_DAC);
++		udelay(10);
++	}
++
++	/* Re-lock registers */
++	val = readl(base + PLLRG_PROTECT);
++	writel(val & ~PLLRG_PROTECT_MASK, base + PLLRG_PROTECT);
++
++	local_irq_restore(flags);
++}
++
+ static int airoha_cpu_pmdomain_set_performance_state(
+ 		struct generic_pm_domain *domain, unsigned int state)
+ {
+ 	struct airoha_cpu_pmdomain_priv *priv =
+@@ -262,7 +305,7 @@ static int airoha_cpu_pmdomain_set_performance_state(
+ 	if (priv->use_smc)
+ 		err = airoha_cpu_smc_set_freq(priv, state);
+ 	else
+ 		err = airoha_cpu_pll_set_freq(priv, state);
+ 
++	airoha_cpu_avs_voltage(priv, 700 + state * 50);
++
+ 	return err;
+ }
+--- a/target/linux/airoha/dts/an7581.dtsi
++++ b/target/linux/airoha/dts/an7581.dtsi
+@@ -180,7 +180,7 @@
+ 
+ 	cpufreq: cpufreq {
+-		reg = <0x0 0x1fa20000 0x0 0x2c0>, <0x0 0x1efbe000 0x0 0x800>;
++		reg = <0x0 0x1fa20000 0x0 0x300>, <0x0 0x1efbe000 0x0 0x800>;
+ 		reg-names = "chip-scu", "mcucfg";
+ 		compatible = "airoha,en7581-cpufreq";
+ 
+ 		operating-points-v2 = <&cpu_smcc_opp_table>;
+-- 
+2.43.0
