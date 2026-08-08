@@ -103,10 +103,12 @@ normalize_mtimes() {
   # (observed: warm build took 34m with 86% ccache hits — pure step
   # overhead). Content is provably identical under the exact-key
   # discipline, so normalize mtimes to now, making the restored stamps
-  # authoritative.
+  # authoritative. build_dir/host + staging_dir/host are included: host
+  # tools (tools/*) re-run their full compile chains otherwise.
   local clone="$1"
   echo "builddir-cache: normalizing restored tree mtimes (stamps become authoritative)"
   find "$clone"/build_dir/target-* "$clone"/staging_dir/target-* \
+       "$clone"/build_dir/host "$clone"/staging_dir/host \
     -exec touch -f {} + 2>/dev/null || true
 }
 
