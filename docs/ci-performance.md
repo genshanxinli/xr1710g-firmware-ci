@@ -54,6 +54,9 @@ restore 时 key 与 version 必须同时匹配。因此 sync-upstream 的树必�
 
 | 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | 固件编译 | ccache 命中 | 备注 |
 |---|---|---|---|---|---|---|---|
+| 2026-08-08 | 31260842118 | 阶段2 warm（ci/phase2-builddir-cache） | 21m18s | SKIPPED | 14m55s | 83%（本轮） | tb/tp 恢复+validate 绿，但 STAMP_PREPARED 名含 mtime（find_md5 %T@）→ 258 包 prepare 全重跑；触发 freeze-source-mtimes 修复（35709cd） |
+| 2026-08-08 | 31258008443 | 阶段2 warm v2（诊断失败） | — | SKIPPED | 34m15s | 86% | 根因①preflight prepare 破坏恢复树（rm -rf PKG_BUILD_DIR）；根因②host 树 mtime 陈旧 tools 重编 |
+| 2026-08-08 | 31254657180 | 阶段2 种子 v4 | 43m36s | SKIPPED | 36m58s | 种子冷 | tb 1.7GB / tp 2.3GB 带 .ci-meta 标记条目落位；kernel sha 基线 a40b3e5c |
 | 2026-08-07 | 31221627661 | 全量构建（main，warm） | **39m16s** | SKIPPED（exact hit） | 34m25s | **86.7%**（本轮新增调用；累计 47.1% 被种子冷跑稀释） | ✅ 阶段 1 目标达成（≤35min 差 4min，非编译开销占大头） |
 | 2026-08-07 | 31215345340 | 全量构建（main，种子冷启动） | 1h30m35s | 40m47s 冷 | 39m04s | 11.2%（累计） | main scope 缓存已就位；磁盘 54% 无压力 |
 | 2026-08-07 | 31206015949 | validate-patches 暖态（PR ref） | **5m28s** | SKIPPED（exact hit） | — | exact hit | 缓存闭环验证 ✓ |
