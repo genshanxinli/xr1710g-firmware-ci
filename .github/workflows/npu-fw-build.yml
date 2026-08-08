@@ -21,7 +21,7 @@ jobs:
 
       - name: Patch SDK build issues
         working-directory: airoha-npu-fdk
-        run: python3 ../.github/scripts/patch-npu-fdk.py .
+        run: python3 "$GITHUB_WORKSPACE/.github/scripts/patch-npu-fdk.py" .
 
       - name: Build NPU firmware
         working-directory: airoha-npu-fdk
