@@ -1,0 +1,38 @@
+name: Build NPU Firmware (FDK)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-npu-fw:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install LLVM toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clang lld llvm
+          clang --version | head -1
+
+      - name: Clone Airoha NPU FDK
+        run: git clone --depth 1 https://github.com/hurryman2212/airoha-npu-fdk.git
+
+      - name: Build NPU firmware
+        working-directory: airoha-npu-fdk
+        run: |
+          python3 airoha-npu-fdk-build --platform an7581 -o en7581_MT7996_npu --debug-directory debug
+          ls -la en7581_MT7996_npu_*.bin
+          md5sum en7581_MT7996_npu_*.bin
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: npu-firmware
+          path: |
+            airoha-npu-fdk/en7581_MT7996_npu_rv32.bin
+            airoha-npu-fdk/en7581_MT7996_npu_data.bin
+            airoha-npu-fdk/debug/firmware.elf
+            airoha-npu-fdk/debug/firmware.map
+          if-no-files-found: error
