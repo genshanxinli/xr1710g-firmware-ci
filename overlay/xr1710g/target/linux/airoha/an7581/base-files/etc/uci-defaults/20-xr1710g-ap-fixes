@@ -5,12 +5,28 @@
 # - disable IPv6 RA/DHCPv6 (avoid ULA prefix pollution in AP mode)
 # - disable wan interface + wan firewall zone residue
 # - generate /etc/fw_env.config (30_uboot-envtools absent in this base)
+# - board.json integrity fix (preinit can cement an empty/corrupt board.json,
+#   which kills wifi config on every boot; regenerate + wifi reload here)
 #
 
 . /lib/functions.sh
 . /lib/functions/system.sh
 
 [ "$(board_name)" = "econet,xr1710g-ubi" ] || exit 0
+
+# --- board.json integrity (empty/corrupt file kills wifi) -------------------
+board_ok() {
+	[ -s "$1" ] && json_load "$(cat "$1")" 2>/dev/null
+}
+if ! board_ok /etc/board.json; then
+	echo "board.json invalid/empty — regenerating"
+	/bin/board_detect
+	if board_ok /etc/board.json; then
+		wifi reload
+	else
+		echo "board_detect still failed; wifi may be unavailable" >&2
+	fi
+fi
 
 # --- LAN upstream (gateway + DNS) -----------------------------------------
 uci set network.lan.gateway='192.168.123.1'
