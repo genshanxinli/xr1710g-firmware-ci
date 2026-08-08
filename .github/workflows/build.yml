@@ -240,6 +240,11 @@ jobs:
         # package dirs + staging (keyed on full content hash); both also
         # bound to dl content + glass HEAD so external input changes
         # (same-version republish / tag force-push) invalidate the tree.
+        # FREEZE_EPOCH is part of the key: STAMP_PREPARED names embed
+        # find_md5 (content+mtime), so a different epoch yields stamps
+        # that never match — binding it keeps generations cleanly
+        # separated (actions/cache save refuses to overwrite an existing
+        # key, so an epoch change must produce a NEW key).
         id: bdc-keys
         if: env.USE_BUILD_DIR_CACHE == 'true'
         run: |
@@ -247,8 +252,8 @@ jobs:
           DHASH="$(bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh dl-hash ${{ env.BUILD_DIR }}/dl)"
           GHASH="$(git -C ${{ env.BUILD_DIR }}/package/luci-theme-glass rev-parse HEAD)"
           echo "kernel_hash=$KHASH" >> "$GITHUB_OUTPUT"
-          echo "tb_key=tb-${{ steps.clone.outputs.upstream_commit }}-$KHASH-$DHASH-$GHASH" >> "$GITHUB_OUTPUT"
-          echo "tp_key=tp-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-$DHASH-$GHASH" >> "$GITHUB_OUTPUT"
+          echo "tb_key=tb-${{ steps.clone.outputs.upstream_commit }}-$KHASH-$DHASH-$GHASH-$FREEZE_EPOCH" >> "$GITHUB_OUTPUT"
+          echo "tp_key=tp-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-$DHASH-$GHASH-$FREEZE_EPOCH" >> "$GITHUB_OUTPUT"
 
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
