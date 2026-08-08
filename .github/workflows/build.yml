@@ -298,6 +298,10 @@ jobs:
       - name: Validate build-dir cache
         # Marker + artifact-fingerprint checks; on mismatch the channels
         # are wiped (cold rebuild) with a loud warning, never silently used.
+        # Also detects a saved freeze-epoch mismatch (stamps incompatible
+        # with the current run's source mtimes) and outputs force_resave so
+        # the save steps re-store the tree even on a cache-hit.
+        id: validate-bd
         if: env.USE_BUILD_DIR_CACHE == 'true'
         run: |
           bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh validate \
@@ -389,7 +393,7 @@ jobs:
             ${{ steps.ci-hash.outputs.ci_hash }}
 
       - name: Save kernel build-dir cache
-        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.cache-tb.outputs.cache-hit != 'true' && steps.check-bd.outputs.exists == 'true'
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.check-bd.outputs.exists == 'true' && (steps.cache-tb.outputs.cache-hit != 'true' || steps.validate-bd.outputs.force_resave == 'true')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -398,7 +402,7 @@ jobs:
           key: ${{ steps.bdc-keys.outputs.tb_key }}
 
       - name: Save package build-dir cache
-        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.cache-tp.outputs.cache-hit != 'true' && steps.check-bd.outputs.exists == 'true'
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.check-bd.outputs.exists == 'true' && (steps.cache-tp.outputs.cache-hit != 'true' || steps.validate-bd.outputs.force_resave == 'true')
         uses: actions/cache/save@v4
         with:
           path: |
