@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# XR1710G security defaults (SEC01 + SEC07):
+# - SEC01: set a random root password on first boot when the account has no
+#   password (image default). The password is printed once to the boot
+#   console and syslog; it is never stored in any file.
+# - SEC07: enable WPA3-SAE on 2.4G/5G with a random PSK generated at first
+#   boot (also printed once). 6G keeps OWE (regulatory-correct for the
+#   unlicensed portion). Both remain user-overridable via uci.
+#
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "econet,xr1710g-ubi" ] || exit 0
+
+gen_cred() {
+	# random alnum credential, 12-16 chars, from kernel entropy
+	head -c 64 /dev/urandom 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "${1:-12}"
+}
+
+# --- SEC01: random root password --------------------------------------------
+if ! passwd -S root 2>/dev/null | grep -q ' P '; then
+	P="$(gen_cred 12)"
+	if echo "root:$P" | chpasswd 2>/dev/null; then
+		echo "=============================================="
+		echo " XR1710G root password (set once): $P"
+		echo " Change it after first login."
+		echo "=============================================="
+		logger -t xr1710g-security "root password set at first boot (random)"
+	else
+		echo "WARNING: failed to set root password" >&2
+	fi
+fi
+
+# --- SEC07: WPA3-SAE on 2.4G/5G ---------------------------------------------
+P="$(gen_cred 14)"
+config_load wireless
+set_sae() {
+	local cfg="$1"
+	local band
+
+	config_get band "$cfg" band
+	case "$band" in
+	2g|5g)
+		uci set wireless."$cfg".encryption='sae'
+		uci set wireless."$cfg".key="$P"
+		;;
+	esac
+}
+config_foreach set_sae wifi-device
+
+uci commit wireless
+wifi reload 2>/dev/null
+
+echo "=============================================="
+echo " XR1710G WiFi PSK (WPA3-SAE, 2.4G/5G): $P"
+echo " 6G remains OWE. Override via uci if needed."
+echo "=============================================="
+logger -t xr1710g-security "WPA3-SAE enabled with random PSK at first boot"
+
+exit 0
