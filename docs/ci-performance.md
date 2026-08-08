@@ -54,7 +54,11 @@ restore 时 key 与 version 必须同时匹配。因此 sync-upstream 的树必�
 
 | 日期 | Run ID | 类型 | 总时长 | toolchain 构建 | 固件编译 | ccache 命中 | 备注 |
 |---|---|---|---|---|---|---|---|
-| 2026-08-08 | 31260842118 | 阶段2 warm（ci/phase2-builddir-cache） | 21m18s | SKIPPED | 14m55s | 83%（本轮） | tb/tp 恢复+validate 绿，但 STAMP_PREPARED 名含 mtime（find_md5 %T@）→ 258 包 prepare 全重跑；触发 freeze-source-mtimes 修复（35709cd） |
+| 2026-08-08 | 31276379186 | 阶段2 warm ✅（ci/phase2-builddir-cache） | **22m04s** | SKIPPED | **10m32s** | — | **D1 验证通过**：tb/tp 双命中 + validate 绿 + prepare 全跳过（.built 重编 258→2，kernel 补丁 0，下载 0）；canary kernel sha=a40b3e5c 与种子 v4 逐字节一致；残余=linux-firmware 大 tarball 解包 + kernel FORCE configure |
+| 2026-08-08 | 31275338894 | 阶段2 过渡（无 DHASH key） | 38m17s | SKIPPED | 16m54s | — | 稳定 key（tb/tp 不含 dl hash）条目落位；dl 内容每轮漂移（restore bc9f12dc vs post-build 83d631c3）使 DHASH key 永 miss——指纹检查已兜底正确性 |
+| 2026-08-08 | 31273854605 | 阶段2 过渡（完整 dl） | — | SKIPPED | 16m45s | — | 下载 0 + kernel 0 确认 dl 闭环；但 DHASH 漂移致 tb/tp miss → 全量重编 + 保存新 DHASH 基 |
+| 2026-08-08 | 31272602081 | 阶段2 过渡（post-build dl save） | — | SKIPPED | 14m48s | — | dl 完整条目（bc9f12dc）post-build 落位；残余 18 包 = 缺 tarball 的包（make download 不拉 feeds 包，仅在 build 中 prepare 时下载） |
+| 2026-08-08 | 31260842118 | 阶段2 warm（组合拳后） | 21m18s | SKIPPED | 14m55s | 83%（本轮） | tb/tp 恢复+validate 绿，但 STAMP_PREPARED 名含 mtime（find_md5 %T@）→ 258 包 prepare 全重跑；触发 freeze-source-mtimes 修复（35709cd） |
 | 2026-08-08 | 31258008443 | 阶段2 warm v2（诊断失败） | — | SKIPPED | 34m15s | 86% | 根因①preflight prepare 破坏恢复树（rm -rf PKG_BUILD_DIR）；根因②host 树 mtime 陈旧 tools 重编 |
 | 2026-08-08 | 31254657180 | 阶段2 种子 v4 | 43m36s | SKIPPED | 36m58s | 种子冷 | tb 1.7GB / tp 2.3GB 带 .ci-meta 标记条目落位；kernel sha 基线 a40b3e5c |
 | 2026-08-07 | 31221627661 | 全量构建（main，warm） | **39m16s** | SKIPPED（exact hit） | 34m25s | **86.7%**（本轮新增调用；累计 47.1% 被种子冷跑稀释） | ✅ 阶段 1 目标达成（≤35min 差 4min，非编译开销占大头） |
