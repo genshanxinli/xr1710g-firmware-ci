@@ -202,8 +202,12 @@ jobs:
           done
 
       - name: Check dl cache
+        # Runs unconditionally: the content-hashed save below must be able
+        # to refresh the dl cache even when restore hit an old entry (old
+        # entries can be missing tarballs; STAMP_PREPARED depends on
+        # $(DL_DIR)/$(FILE), so a stale dl re-triggers package prepares).
         id: check-dl
-        if: success() && steps.cache-dl.outputs.cache-hit != 'true'
+        if: success()
         run: |
           set +e
           if [ -d "${{ env.BUILD_DIR }}/dl" ] && [ -n "$(find "${{ env.BUILD_DIR }}/dl" -mindepth 1 -print -quit)" ]; then
