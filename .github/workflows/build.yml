@@ -26,6 +26,10 @@ env:
   # plus build_dir/staging_dir/dl would push the job off the disk.
   CCACHE_MAXSIZE: 4G
   CCACHE_COMPRESS: "1"
+  # Fixed epoch for source-tree freezing + cache-tree mtime normalization
+  # (see scripts/freeze-source-mtimes.sh): must be identical on EVERY run
+  # so find_md5 (content+mtime) produces stable STAMP_PREPARED names.
+  FREEZE_EPOCH: "1786062016"
 
 jobs:
   build:
@@ -214,6 +218,22 @@ jobs:
         with:
           path: ${{ env.BUILD_DIR }}/dl
           key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
+
+      - name: Freeze source tree mtimes
+        # STAMP_PREPARED embeds find_md5, which hashes "%p%T@\n" — file
+        # mtime INCLUDED (include/depends.mk). The package/kernel/tools
+        # sources are re-cloned on every run, so their mtimes differ
+        # between runs and the restored .prepared_<hash> stamps never match
+        # the name make computes — every package re-extracts and rebuilds
+        # (observed: warm run 14m55s, 258 package rebuilds, kernel too).
+        # Freezing package/ feeds/ tools/ target/ to the same FIXED epoch
+        # on every run (seed AND warm alike) makes find_md5 stable;
+        # normalize_mtimes sets the cached trees to the same epoch, so
+        # equal mtimes make make treat stamps as up-to-date.
+        # UNCONDITIONAL: the seed run must freeze too, or its saved stamp
+        # names won't match future warm runs.
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/freeze-source-mtimes.sh ${{ env.BUILD_DIR }}
 
       - name: Compute build-dir cache keys
         # tb = kernel objtree (keyed on kernel-affecting hash), tp =
