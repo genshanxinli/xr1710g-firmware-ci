@@ -2,6 +2,12 @@ name: XR1710G Firmware CI
 
 on:
   workflow_dispatch:
+    inputs:
+      build_dir_cache:
+        description: Phase-2 build_dir/target incremental cache (tb/tp channels)
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,6 +20,8 @@ env:
   GLASS_REF: v1.1.6
   BUILD_DIR: openwrt
   CI_REPO: ci-repo
+  # Rollback switch: false restores the phase-1 behavior (34m floor).
+  USE_BUILD_DIR_CACHE: ${{ inputs.build_dir_cache }}
   # 4G cap: standard runners have only ~14G free disk; a larger ccache
   # plus build_dir/staging_dir/dl would push the job off the disk.
   CCACHE_MAXSIZE: 4G
@@ -207,11 +215,63 @@ jobs:
           path: ${{ env.BUILD_DIR }}/dl
           key: dl-fanboy-${{ steps.clone.outputs.upstream_commit }}
 
+      - name: Compute build-dir cache keys
+        # tb = kernel objtree (keyed on kernel-affecting hash), tp =
+        # package dirs + staging (keyed on full content hash); both also
+        # bound to dl content + glass HEAD so external input changes
+        # (same-version republish / tag force-push) invalidate the tree.
+        id: bdc-keys
+        if: env.USE_BUILD_DIR_CACHE == 'true'
+        run: |
+          KHASH="$(bash ${{ env.CI_REPO }}/scripts/ci-content-hash.sh --kernel ${{ env.CI_REPO }})"
+          DHASH="$(bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh dl-hash ${{ env.BUILD_DIR }}/dl)"
+          GHASH="$(git -C ${{ env.BUILD_DIR }}/package/luci-theme-glass rev-parse HEAD)"
+          echo "kernel_hash=$KHASH" >> "$GITHUB_OUTPUT"
+          echo "tb_key=tb-${{ steps.clone.outputs.upstream_commit }}-$KHASH-$DHASH-$GHASH" >> "$GITHUB_OUTPUT"
+          echo "tp_key=tp-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}-$DHASH-$GHASH" >> "$GITHUB_OUTPUT"
+
       - name: Build tools + toolchain
         if: steps.cache-tc.outputs.cache-hit != 'true'
         run: |
           cd ${{ env.BUILD_DIR }}
           make tools/install toolchain/install -j$(nproc) V=s 2>&1 | tail -30
+
+      - name: Restore kernel build-dir cache
+        id: cache-tb
+        if: env.USE_BUILD_DIR_CACHE == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          # EXACT KEY ONLY: a fallback restore of a stale kernel tree would
+          # be a wrong-build accident (unlike ccache, where a miss is the
+          # worst case). Hash mismatch => cold build (phase-1 floor).
+          path: |
+            ${{ env.BUILD_DIR }}/build_dir/target-*/linux-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
+          key: ${{ steps.bdc-keys.outputs.tb_key }}
+
+      - name: Restore package build-dir cache
+        id: cache-tp
+        if: env.USE_BUILD_DIR_CACHE == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/build_dir/target-*/package-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/root-*
+            ${{ env.BUILD_DIR }}/staging_dir/target-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
+          key: ${{ steps.bdc-keys.outputs.tp_key }}
+
+      - name: Validate build-dir cache
+        # Marker + artifact-fingerprint checks; on mismatch the channels
+        # are wiped (cold rebuild) with a loud warning, never silently used.
+        if: env.USE_BUILD_DIR_CACHE == 'true'
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh validate \
+            ${{ env.BUILD_DIR }} \
+            ${{ steps.bdc-keys.outputs.kernel_hash }} \
+            ${{ steps.ci-hash.outputs.ci_hash }} \
+            ${{ steps.cache-tb.outputs.cache-hit }} \
+            ${{ steps.cache-tp.outputs.cache-hit }}
 
       - name: Collect CI metrics (pre-build)
         # After the toolchain step so the ccache binary (staging_dir/host)
@@ -276,6 +336,71 @@ jobs:
         with:
           path: ${{ env.BUILD_DIR }}/.ccache
           key: ccache-fanboy-${{ steps.clone.outputs.upstream_commit }}-${{ steps.ci-hash.outputs.ci_hash }}
+
+      - name: Check build-dir cache
+        id: check-bd
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success()
+        run: |
+          set +e
+          if ls -d ${{ env.BUILD_DIR }}/build_dir/target-*/linux-* >/dev/null 2>&1 \
+             && ls -d ${{ env.BUILD_DIR }}/build_dir/target-*/package-* >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare build-dir cache
+        # Writes .ci-meta markers + per-channel artifact fingerprints inside
+        # the cached paths (validated on the next run's restore).
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.check-bd.outputs.exists == 'true'
+        run: |
+          bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh prepare-save \
+            ${{ env.BUILD_DIR }} \
+            ${{ steps.bdc-keys.outputs.kernel_hash }} \
+            ${{ steps.ci-hash.outputs.ci_hash }}
+
+      - name: Save kernel build-dir cache
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.cache-tb.outputs.cache-hit != 'true' && steps.check-bd.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/build_dir/target-*/linux-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
+          key: ${{ steps.bdc-keys.outputs.tb_key }}
+
+      - name: Save package build-dir cache
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success() && steps.cache-tp.outputs.cache-hit != 'true' && steps.check-bd.outputs.exists == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.BUILD_DIR }}/build_dir/target-*/package-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/root-*
+            ${{ env.BUILD_DIR }}/staging_dir/target-*
+            ${{ env.BUILD_DIR }}/build_dir/target-*/.ci-meta
+          key: ${{ steps.bdc-keys.outputs.tp_key }}
+
+      - name: Kernel fingerprint canary
+        # C1: compare the shipped kernel-1 sub-image against the previous
+        # run; "kernel changed with same inputs" or "inputs changed with
+        # same kernel" both warn loudly.
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success()
+        run: |
+          ITB="$(ls ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*-sysupgrade.itb 2>/dev/null | head -1)"
+          if [ -n "$ITB" ]; then
+            bash ${{ env.CI_REPO }}/scripts/builddir-cache.sh kernel-fingerprint \
+              "$ITB" ${{ steps.ci-hash.outputs.ci_hash }} ${{ steps.clone.outputs.upstream_commit }}
+          else
+            echo "No sysupgrade image produced — canary skipped"
+          fi
+
+      - name: Upload kernel fingerprint
+        if: env.USE_BUILD_DIR_CACHE == 'true' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-fingerprint
+          path: /tmp/kernel-fingerprint.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Collect CI metrics (post-build)
         if: always()
