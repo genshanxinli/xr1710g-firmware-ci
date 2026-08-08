@@ -96,6 +96,20 @@ wipe_channels() {
   rm -rf "$clone"/build_dir/target-* "$clone"/staging_dir/target-*
 }
 
+normalize_mtimes() {
+  # After a validated restore, the fresh clone's source files (patches,
+  # Makefiles, files/) carry checkout-time mtimes NEWER than the restored
+  # stamps — OpenWrt would otherwise re-prepare/re-build every package
+  # (observed: warm build took 34m with 86% ccache hits — pure step
+  # overhead). Content is provably identical under the exact-key
+  # discipline, so normalize mtimes to now, making the restored stamps
+  # authoritative.
+  local clone="$1"
+  echo "builddir-cache: normalizing restored tree mtimes (stamps become authoritative)"
+  find "$clone"/build_dir/target-* "$clone"/staging_dir/target-* \
+    -exec touch -f {} + 2>/dev/null || true
+}
+
 strip_non_kernel_linux_dirs() {
   # The linux-* glob in the tb channel also matches package dirs such as
   # linux-firmware-<ver>. The kernel objtree always contains a nested
@@ -137,6 +151,10 @@ validate() {
     else
       echo "builddir-cache: package channel validated OK"
     fi
+  fi
+
+  if [ "$bad" -eq 0 ] && { [ "$tb_hit" = "true" ] || [ "$tp_hit" = "true" ]; }; then
+    normalize_mtimes "$clone"
   fi
 }
 
