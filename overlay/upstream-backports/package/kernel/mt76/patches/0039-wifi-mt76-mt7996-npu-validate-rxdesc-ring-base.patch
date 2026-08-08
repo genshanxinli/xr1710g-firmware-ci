@@ -31,8 +31,7 @@ re-define the function here.
 
 --- a/mt7996/npu.c
 +++ b/mt7996/npu.c
-@@ -8,3 +8,26 @@
- 
+@@ -8,5 +8,34 @@
  #include "mt7996.h"
  
 +/* XR1710G (AN7581) NPU reserved DRAM, contiguous from npu-pkt through
