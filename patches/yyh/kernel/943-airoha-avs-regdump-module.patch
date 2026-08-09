@@ -1,0 +1,79 @@
+From: XR1710G CI <genshanxinli@users.noreply.github.com>
+Subject: [PATCH] airoha: avs-regdump - FIX-02 verification module
+
+STRICT_DEVMEM blocks user-space /dev/mem access on arm64 (non-PCI MMIO
+rejected), so the only way to read the AVS voltage control registers
+(0x1fa202a0 RG_AVS_OUT_EN bit0, 0x1fa202e0 RG_DATA_AVS_DAC) on a
+running XR1710G is an in-kernel ioremap.  Tiny module, prints the
+registers at init; used to verify the 941/942 boost actually took
+effect (OUT_EN bit0 must be 1, DAC inside [0x80,0x350], baseline-delta
+at 1400MHz).  NOT loaded by default; insmod by hand.
+
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -21,6 +21,7 @@ obj-$(CONFIG_PHANTOM)		+= phantom.o
+ obj-$(CONFIG_RPMB)		+= rpmb-core.o
+ obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
+ obj-$(CONFIG_QCOM_FASTRPC)	+= fastrpc.o
++obj-m				+= avs_regdump.o
+ obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
+ obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
+ obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
+--- /dev/null
++++ b/drivers/misc/avs_regdump.c
+@@ -0,0 +1,99 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * avs_regdump - read AVS voltage control registers on XR1710G (FIX-02).
++ *
++ * STRICT_DEVMEM blocks /dev/mem user access, so an in-kernel ioremap is
++ * the only way to verify the 941/942 boost took effect:
++ *   - RG_AVS_OUT_EN (0x1fa202a0) bit0: 1 after 942 boots
++ *   - RG_DATA_AVS_DAC (0x1fa202e0): baseline - delta (~29 LSB @1400MHz)
++ *
++ * Usage: insmod avs_regdump.ko ; dmesg | tail
++ */
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/module.h>
++
++#define AVS_BASE		0x1fa20000UL
++#define CPUPLL_AVS_OUT_EN	0x2a0
++#define CPUPLL_AVS_DAC		0x2e0
++#define CPUPLL_AVS_DAC_MASK	0x3ff
++#define PLLRG_PROTECT		0x268
++
++static int __init avs_regdump_init(void)
++{
++	void __iomem *base;
++	u32 val;
++
++	base = ioremap(AVS_BASE, 0x1000);
++	if (!base) {
++		pr_err("avs_regdump: ioremap failed\n");
++		return -ENOMEM;
++	}
++
++	pr_info("avs_regdump: PLLRG_PROTECT(0x1fa20268) = 0x%08x\n",
++		readl(base + PLLRG_PROTECT));
++	val = readl(base + CPUPLL_AVS_OUT_EN);
++	pr_info("avs_regdump: AVS_OUT_EN(0x1fa202a0)   = 0x%08x (bit0=%u)\n",
++		val, val & 1u);
++	val = readl(base + CPUPLL_AVS_DAC);
++	pr_info("avs_regdump: AVS_DAC(0x1fa202e0)      = 0x%08x (masked=0x%03x)\n",
++		val, val & CPUPLL_AVS_DAC_MASK);
++
++	iounmap(base);
++	return 0;
++}
++
++static void __exit avs_regdump_exit(void)
++{
++}
++
++module_init(avs_regdump_init);
++module_exit(avs_regdump_exit);
++
++MODULE_LICENSE("GPL");
++MODULE_DESCRIPTION("XR1710G AVS register dump (FIX-02 verify)");
+*** end of patch
