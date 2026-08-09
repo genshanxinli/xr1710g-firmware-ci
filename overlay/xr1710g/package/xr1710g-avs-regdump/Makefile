@@ -1,13 +1,9 @@
-#
-# Copyright (C) 2026 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
+include $(TOPDIR)/rules.mk
+include $(INCLUDE_DIR)/kernel.mk
 
 # XR1710G AVS register dump (FIX-02 verification helper).
 # The module source lives in the kernel tree (patches/yyh/kernel/943);
-# this package just exposes it so the .ko gets packaged into the image.
+# this package exposes it so the .ko gets packaged into the image.
 # Load on device: insmod kmod-xr1710g-avs-regdump ; dmesg | grep avs_regdump
 
 define KernelPackage/xr1710g-avs-regdump
