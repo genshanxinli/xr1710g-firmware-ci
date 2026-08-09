@@ -1,0 +1,25 @@
+--- a/target/linux/airoha/modules.mk
++++ b/target/linux/airoha/modules.mk
+@@ -19,7 +19,22 @@
+ define KernelPackage/pwm-airoha/description
+  Kernel module to use the PWM channel on Airoha SoC
+ endef
+ 
+ $(eval $(call KernelPackage,pwm-airoha))
+ 
+ 
++
++define KernelPackage/xr1710g-avs-regdump
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=XR1710G AVS register dump (FIX-02 verify)
++  DEPENDS:=@TARGET_airoha
++  KCONFIG:=CONFIG_XR1710G_AVS_REGDUMP=m
++  FILES:=$(LINUX_DIR)/drivers/misc/avs_regdump.ko
++endef
++
++define KernelPackage/xr1710g-avs-regdump/description
++  Read-only dump of the AVS voltage control registers
++  (RG_AVS_OUT_EN 0x1fa202a0, RG_DATA_AVS_DAC 0x1fa202e0).
++endef
++
++$(eval $(call KernelPackage,xr1710g-avs-regdump))
