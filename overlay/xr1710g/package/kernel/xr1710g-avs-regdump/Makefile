@@ -1,5 +1,6 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
+include $(INCLUDE_DIR)/package.mk
 
 # XR1710G AVS register dump (FIX-02 verification helper).
 # The module source lives in the kernel tree (patches/yyh/kernel/943);
