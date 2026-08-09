@@ -1,0 +1,17 @@
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -1914,9 +1914,14 @@ static struct mt7996_wed_rro_addr *
+ 	if (session_id == MT7996_RRO_MAX_SESSION) {
+ 		addr = dev->wed_rro.session.ptr;
+ 	} else {
+ 		idx = session_id / MT7996_RRO_BA_BITMAP_SESSION_SIZE;
++		if (idx >= MT7996_RRO_ADDR_ELEM_LEN) {
++			WARN_ONCE(1, "mt7996: RRO session_id %u out of range\n",
++				  session_id);
++			idx %= MT7996_RRO_ADDR_ELEM_LEN;
++		}
+ 		addr = dev->wed_rro.addr_elem[idx].ptr;
+ 
+ 		idx = session_id % MT7996_RRO_BA_BITMAP_SESSION_SIZE;
+ 		idx = idx * MT7996_RRO_WINDOW_MAX_LEN;
+ 	}

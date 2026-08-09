@@ -533,6 +533,22 @@ jobs:
             ${{ env.BUILD_DIR }}/bin/targets/airoha/an7581/*.bin
           if-no-files-found: warn
 
+      - name: Record firmware SHA256 (FIX-08)
+        if: always()
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          sha256sum bin/targets/airoha/an7581/*.itb 2>/dev/null \
+            | tee /tmp/fw-sha256.txt || { echo "no firmware images"; exit 0; }
+
+      - name: Upload firmware SHA256 (FIX-08)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-sha256
+          path: /tmp/fw-sha256.txt
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Create Release on tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
