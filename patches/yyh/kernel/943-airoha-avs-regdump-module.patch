@@ -9,12 +9,35 @@ registers at init; used to verify the 941/942 boost actually took
 effect (OUT_EN bit0 must be 1, DAC inside [0x80,0x350], baseline-delta
 at 1400MHz).  NOT loaded by default; insmod by hand.
 
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index b9c11f6..88365fb 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -644,6 +644,15 @@ config MCHP_LAN966X_PCI
+ 	    - lan966x-miim (MDIO_MSCC_MIIM)
+ 	    - lan966x-switch (LAN966X_SWITCH)
+ 
++config XR1710G_AVS_REGDUMP
++	tristate "XR1710G AVS register dump (FIX-02 verify)"
++	depends on TARGET_airoha
++	help
++	  Read-only dump of the AVS voltage control registers
++	  (RG_AVS_OUT_EN 0x1fa202a0, RG_DATA_AVS_DAC 0x1fa202e0) for
++	  FIX-02 verification.  Build as module (kmod-xr1710g-avs-regdump),
++	  load with insmod, check dmesg.
++
+ source "drivers/misc/c2port/Kconfig"
+ source "drivers/misc/eeprom/Kconfig"
+ source "drivers/misc/cb710/Kconfig"
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index b32a259..97e7b23 100644
 --- a/drivers/misc/Makefile
 +++ b/drivers/misc/Makefile
-@@ -20,5 +20,6 @@ obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
+@@ -19,6 +19,7 @@ obj-$(CONFIG_PHANTOM)		+= phantom.o
+ obj-$(CONFIG_RPMB)		+= rpmb-core.o
  obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
  obj-$(CONFIG_QCOM_FASTRPC)	+= fastrpc.o
-+obj-m				+= avs_regdump.o
++obj-$(CONFIG_XR1710G_AVS_REGDUMP)	+= avs_regdump.o
  obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
  obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
  obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
