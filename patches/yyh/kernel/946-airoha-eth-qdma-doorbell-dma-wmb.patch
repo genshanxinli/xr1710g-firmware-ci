@@ -1,0 +1,20 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1993,4 +1993,6 @@ static netdev_tx_t airoha_qdma_xmit(struct sk_buff *skb,
+-	if (netif_xmit_stopped(txq) || !netdev_xmit_more())
++	if (netif_xmit_stopped(txq) || !netdev_xmit_more()) {
++		dma_wmb();
+ 		airoha_qdma_rmw(qdma, REG_TX_CPU_IDX(qid),
+ 				TX_RING_CPU_IDX_MASK,
+ 				FIELD_PREP(TX_RING_CPU_IDX_MASK, q->head));
++	}
+ 
+ 	if (q->ndesc - q->queued < q->free_thr)
+ 		netif_tx_stop_queue(txq);
+@@ -586,5 +589,6 @@ static int airoha_qdma_rx_refill(struct airoha_qdma *qdma, int qid,
+ 		WRITE_ONCE(desc->msg3, 0);
+ 
++		dma_wmb();
+ 		airoha_qdma_rmw(qdma, REG_RX_CPU_IDX(qid),
+ 				RX_RING_CPU_IDX_MASK,
+ 				FIELD_PREP(RX_RING_CPU_IDX_MASK, q->head));
