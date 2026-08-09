@@ -11,8 +11,7 @@ at 1400MHz).  NOT loaded by default; insmod by hand.
 
 --- a/drivers/misc/Makefile
 +++ b/drivers/misc/Makefile
-@@ -21,6 +21,7 @@ obj-$(CONFIG_PHANTOM)		+= phantom.o
- obj-$(CONFIG_RPMB)		+= rpmb-core.o
+@@ -20,5 +20,6 @@ obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
  obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
  obj-$(CONFIG_QCOM_FASTRPC)	+= fastrpc.o
 +obj-m				+= avs_regdump.o
@@ -21,7 +20,7 @@ at 1400MHz).  NOT loaded by default; insmod by hand.
  obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
 --- /dev/null
 +++ b/drivers/misc/avs_regdump.c
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,54 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * avs_regdump - read AVS voltage control registers on XR1710G (FIX-02).
@@ -76,4 +75,3 @@ at 1400MHz).  NOT loaded by default; insmod by hand.
 +
 +MODULE_LICENSE("GPL");
 +MODULE_DESCRIPTION("XR1710G AVS register dump (FIX-02 verify)");
-*** end of patch
