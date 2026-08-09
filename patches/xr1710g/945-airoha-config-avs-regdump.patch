@@ -1,0 +1,9 @@
+--- a/target/linux/airoha/an7581/config-6.18
++++ b/target/linux/airoha/an7581/config-6.18
+@@ -388,5 +388,6 @@
+ CONFIG_ZLIB_INFLATE=y
+ CONFIG_ZONE_DMA32=y
+ CONFIG_ZSTD_COMMON=y
+ CONFIG_ZSTD_COMPRESS=y
+ CONFIG_ZSTD_DECOMPRESS=y
++CONFIG_XR1710G_AVS_REGDUMP=m
