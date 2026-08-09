@@ -1,12 +1,19 @@
 #!/bin/sh
 #
-# XR1710G security defaults (SEC01 + SEC07):
+# XR1710G security defaults (SEC01 + SEC04 + SEC06 + SEC07 + FIX-06):
 # - SEC01: set a random root password on first boot when the account has no
 #   password (image default). The password is printed once to the boot
 #   console and syslog; it is never stored in any file.
+# - SEC04: ttyd web terminal requires credentials (basic auth) instead of an
+#   unauthenticated root shell over HTTP.
+# - SEC06: remove the unauthenticated cgi-bin upload/download/exec/backup
+#   endpoints (uninstall uhttpd-mod-lua-* scripts if present).
 # - SEC07: enable WPA3-SAE on 2.4G/5G with a random PSK generated at first
 #   boot (also printed once). 6G keeps OWE (regulatory-correct for the
 #   unlicensed portion). Both remain user-overridable via uci.
+# - FIX-06: WPA3-SAE is configured at wifi-iface level only; strip any
+#   leftover radio-level (wifi-device) encryption/key keys that leave the
+#   AP effectively open.
 #
 
 . /lib/functions.sh
@@ -33,22 +40,65 @@ if ! passwd -S root 2>/dev/null | grep -q ' P '; then
 	fi
 fi
 
-# --- SEC07: WPA3-SAE on 2.4G/5G ---------------------------------------------
+# --- SEC04: ttyd requires credentials ----------------------------------------
+# Add basic-auth credentials to the ttyd init config, generated at first boot
+# (printed once, like the root password). Removes the unauthenticated root
+# shell that previously answered HTTP 200 on :7681. The stock config uses an
+# anonymous section (ttyd.@ttyd[0]) whose options the OpenWrt ttyd.init reads:
+# interface, command, credential (user:pass -> -c). Only the credential is
+# added here; interface/command stay as configured.
+if uci -q get ttyd.@ttyd[0] >/dev/null 2>&1; then
+	TTYD_USER="root"
+	TTYD_PASS="$(gen_cred 14)"
+	uci set ttyd.@ttyd[0].credential="$TTYD_USER:$TTYD_PASS"
+	uci commit ttyd
+	/etc/init.d/ttyd restart 2>/dev/null
+	echo "=============================================="
+	echo " XR1710G ttyd web terminal (set once): $TTYD_USER / $TTYD_PASS"
+	echo "=============================================="
+	logger -t xr1710g-security "ttyd credential set at first boot (random)"
+fi
+
+# --- SEC06: remove unauthenticated cgi-bin endpoints -------------------------
+for c in /www/cgi-bin/cgi-backup /www/cgi-bin/cgi-download \
+         /www/cgi-bin/cgi-exec /www/cgi-bin/cgi-upload; do
+	if [ -f "$c" ]; then
+		mv -f "$c" "$c.disabled" 2>/dev/null || rm -f "$c"
+		logger -t xr1710g-security "disabled $c"
+	fi
+done
+
+# --- SEC07 + FIX-06: WPA3-SAE at wifi-iface level only -----------------------
+# FIX-06: previous script set encryption/key on wifi-device (radio level),
+# which mac80211 ignores; the ifaces stayed 'none' and the APs ran open.
+# Now the PSK lives on wifi-iface sections only, and any radio-level
+# encryption/key residue is deleted.
 P="$(gen_cred 14)"
 config_load wireless
+
+strip_radio_residue() {
+	local cfg="$1"
+	uci -q delete "wireless.$cfg.encryption"
+	uci -q delete "wireless.$cfg.key"
+}
+config_foreach strip_radio_residue wifi-device
+
 set_sae() {
 	local cfg="$1"
-	local band
+	local device band
 
-	config_get band "$cfg" band
+	config_get device "$cfg" device
+	[ -n "$device" ] || return 0
+
+	config_get band "$device" band
 	case "$band" in
 	2g|5g)
-		uci set wireless."$cfg".encryption='sae'
-		uci set wireless."$cfg".key="$P"
+		uci set "wireless.$cfg.encryption"='sae'
+		uci set "wireless.$cfg.key"="$P"
 		;;
 	esac
 }
-config_foreach set_sae wifi-device
+config_foreach set_sae wifi-iface
 
 uci commit wireless
 wifi reload 2>/dev/null

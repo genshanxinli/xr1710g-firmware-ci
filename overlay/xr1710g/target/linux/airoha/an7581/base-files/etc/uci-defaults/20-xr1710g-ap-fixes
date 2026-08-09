@@ -32,6 +32,17 @@ fi
 uci set network.lan.gateway='192.168.123.1'
 uci set network.lan.dns='192.168.123.1'
 
+# --- NTP: explicit reachable server (FIX-05) -------------------------------
+# The stock timeserver list points at openwrt.pool.ntp.org, which cannot
+# resolve while /tmp/resolv.conf.auto is empty; ntpd then silently fails and
+# the clock drifts. Pin an explicit server (upstream gateway, then a public
+# pool) and restart the NTP client so it picks up the new DNS immediately.
+uci -q delete system.ntp.server
+uci add_list system.ntp.server='192.168.123.1'
+uci add_list system.ntp.server='ntp.aliyun.com'
+uci add_list system.ntp.server='pool.ntp.org'
+/etc/init.d/sysntpd restart 2>/dev/null || true
+
 # --- IPv6: no RA/DHCPv6 in AP mode (upstream provides) ---------------------
 uci set dhcp.lan.ra='disabled'
 uci set dhcp.lan.dhcpv6='disabled'
