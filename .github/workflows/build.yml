@@ -196,6 +196,24 @@ jobs:
           grep "CONFIG_PACKAGE_luci-theme-glass=y" ${{ env.BUILD_DIR }}/.config \
             || { echo "FAIL: luci-theme-glass not selected"; exit 1; }
 
+      - name: Diagnose avs-regdump collection (temporary)
+        run: |
+          cd ${{ env.BUILD_DIR }}
+          echo "=== 1. overlay 复制结果 ==="
+          ls -la package/kernel/xr1710g-avs-regdump/ 2>/dev/null || echo "DIR MISSING"
+          echo "=== 2. scan FILELIST 收录 ==="
+          grep -r "xr1710g-avs" tmp/info/.files-packageinfo-* 2>/dev/null || echo "NOT IN FILELIST"
+          echo "=== 3. packageinfo ==="
+          ls tmp/info/.packageinfo-* 2>/dev/null | grep -i avs || echo "NO PACKAGEINFO"
+          echo "=== 4. .config ==="
+          grep -i "avs" .config || echo "NO avs IN .config"
+          echo "=== 5. .config.override ==="
+          grep -i "avs" build_dir/target-*/linux-*/.config.override 2>/dev/null || echo "NO avs IN OVERRIDE"
+          echo "=== 6. kernel patch applied ==="
+          grep -c "XR1710G_AVS_REGDUMP" target/linux/airoha/patches-6.18/943-airoha-avs-regdump-module.patch 2>/dev/null || echo "PATCH MISSING"
+          echo "=== 7. kernel tree misc/Makefile ==="
+          grep -rn "avs_regdump" build_dir/target-*/linux-*/drivers/misc/Makefile 2>/dev/null | head -3 || echo "NO ENTRY IN KERNEL Makefile"
+
       - name: Download sources
         run: |
           cd ${{ env.BUILD_DIR }}
