@@ -15,7 +15,10 @@ registers live in the chip-SCU region at 0x1fa202e0 (RG_DATA_AVS_DAC,
 bit16 = CHG) / 0x1fa202a0 (RG_AVS_OUT_EN), guarded by the same
 PLLRG_PROTECT key (0x12) already used by the PLL path.
 
-Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
+Boost: +40 mV @ >=1300 MHz, +60 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
+R03 tuning: 1400 MHz with only +40 mV crashed at 6-7.5 min (x2); 1350 MHz
+with +30 mV stable 30 min.  Bumped 1400 MHz to +60 mV (delta_lsb 29->43),
+1300 MHz to +40 mV (delta_lsb 21->29) pending 1h on-device verification.
 
 --- a/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
 +++ b/drivers/pmdomain/mediatek/airoha-cpu-pmdomain.c
@@ -55,9 +58,9 @@ Boost: +30 mV @ >=1300 MHz, +40 mV @ >=1400 MHz (Vcore stays <= 1150 mV).
 +	u32 val, dac, target, delta_lsb = 0;
 +
 +	if (freq_mhz >= 1400)
-+		delta_lsb = 29;	/* ~ +40 mV */
++		delta_lsb = 43;	/* ~ +60 mV (R03: 29=+40mV insufficient, 1400MHz crashed 6-7.5min; 1350MHz stable at +30mV) */
 +	else if (freq_mhz >= 1300)
-+		delta_lsb = 21;	/* ~ +30 mV */
++		delta_lsb = 29;	/* ~ +40 mV */
 +
 +	local_irq_save(flags);
 +
