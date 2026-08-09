@@ -2,6 +2,11 @@ CONFIG_TARGET_airoha=y
 CONFIG_TARGET_airoha_an7581=y
 CONFIG_TARGET_airoha_an7581_DEVICE_econet_xr1710g-ubi=y
 
+# FIX-02 verification kmod (KCONFIG injection requires CONFIG_PACKAGE=y;
+# DEVICE_PACKAGES alone only yields CONFIG_DEFAULT_=y and the module
+# never compiles)
+CONFIG_PACKAGE_kmod-xr1710g-avs-regdump=y
+
 # Base LuCI and XR1710G apps
 CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-app-airoha-npu=y
