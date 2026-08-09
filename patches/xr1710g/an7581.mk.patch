@@ -16,7 +16,7 @@ index 2095d8a..c0ed58c 100644
    UBINIZE_OPTS := -E 5
    BLOCKSIZE := 128k
    PAGESIZE := 2048
-@@ -121,6 +122,48 @@ define Device/gemtek_w1700k-ubi
+@@ -121,6 +122,49 @@ define Device/gemtek_w1700k-ubi
  endef
  TARGET_DEVICES += gemtek_w1700k-ubi
  
@@ -39,6 +39,7 @@ index 2095d8a..c0ed58c 100644
 +		    kmod-mt7996-firmware kmod-phy-realtek rtl826x-firmware \
 +		    xr1710g-mt7996-fw \
 +		    xr1710g-npu-fw \
++		    xr1710g-avs-regdump \
 +		    luci \
 +		    luci-app-firewall luci-app-mlo \
 +		    luci-app-package-manager \
